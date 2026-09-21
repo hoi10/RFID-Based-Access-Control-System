@@ -1,5 +1,4 @@
 # RFID-Based-Access-Control-System
-# RFID-Based Access Control System
 
 ## Giới thiệu về MFRC522 và giao tiếp SPI với STM32
 
