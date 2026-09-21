@@ -7,7 +7,9 @@
 
 Module cho phép **đọc mã nhận dạng duy nhất (UID)** được lưu trong thẻ hoặc tag RFID mà không cần tiếp xúc vật lý. Việc giao tiếp được thực hiện không dây thông qua hiện tượng cảm ứng điện từ. Module thường có phạm vi phát hiện khoảng **2–5 cm**, phù hợp với các hệ thống nhận dạng ở khoảng cách ngắn và yêu cầu kiểm soát truy cập.
 
-<img src="MFRC522_RFID/Picture/RFID.jfif" alt="RFID module RC522" width="300">
+<p align="center">
+  <img src="MFRC522_RFID/Picture/RFID.jfif" alt="RFID module RC522" width="500">
+</p>
 
 **Nguồn: Internet**
 
