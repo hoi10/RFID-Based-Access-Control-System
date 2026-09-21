@@ -11,7 +11,9 @@ Module cho phép **đọc mã nhận dạng duy nhất (UID)** được lưu tro
   <img src="MFRC522_RFID/Picture/RFID.jfif" alt="RFID module RC522" width="500">
 </p>
 
+<p align="center">
 **Nguồn: Internet**
+</p>
 
 MFRC522 có thiết kế nhỏ gọn, tiết kiệm năng lượng và hỗ trợ nhiều giao thức giao tiếp như **SPI, I²C và UART**. Trong đó, SPI thường được sử dụng nhờ tốc độ cao và cách kết nối tương đối đơn giản. Module có thể dễ dàng kết nối với các vi điều khiển như Arduino, ESP32 và STM32 để xây dựng các hệ thống bảo mật và tự động hóa sử dụng RFID.
 
