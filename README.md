@@ -1,6 +1,5 @@
-# RFID-Based-Access-Control-System
-
-## Giới thiệu về MFRC522 và giao tiếp SPI với STM32
+# Giới thiệu về Dự án điều khiển ra vào bằng RFID
+## MFRC522 và giao tiếp SPI với STM32
 
 ### MFRC522 là gì?
 
@@ -8,7 +7,7 @@
 
 Module cho phép **đọc mã nhận dạng duy nhất (UID)** được lưu trong thẻ hoặc tag RFID mà không cần tiếp xúc vật lý. Việc giao tiếp được thực hiện không dây thông qua hiện tượng cảm ứng điện từ. Module thường có phạm vi phát hiện khoảng **2–5 cm**, phù hợp với các hệ thống nhận dạng ở khoảng cách ngắn và yêu cầu kiểm soát truy cập.
 
-![RFID module RC522](picture/RFID)
+![RFID module RC522](MFRC522_RFID/picture/RFID)
 
 **Nguồn: Internet**
 
