@@ -42,3 +42,5 @@ SPI sử dụng **4 tín hiệu chính**:
 - **NSS (Slave Select):** Dùng để chọn/kích hoạt MFRC522 khi giao tiếp.
 
 Trong dự án này, **STM32 đóng vai trò SPI Master**, còn **MFRC522 đóng vai trò SPI Slave**. Dữ liệu được truyền qua mỗi xung clock, giúp SPI trở thành giao thức giao tiếp nhanh và đáng tin cậy cho việc trao đổi dữ liệu với RFID.
+
+# Một số hình ảnh về sản phẩm của dự án
