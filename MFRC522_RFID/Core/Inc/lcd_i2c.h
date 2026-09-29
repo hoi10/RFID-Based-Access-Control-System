@@ -1,0 +1,11 @@
+#ifndef LCD_I2C_H
+#define LCD_I2C_H
+
+#include "main.h"
+
+void LCD_Init(I2C_HandleTypeDef *hi2c, uint8_t address);
+void LCD_Clear(void);
+void LCD_SetCursor(uint8_t row, uint8_t col);
+void LCD_SendString(char *str);
+
+#endif
