@@ -1,0 +1,30 @@
+# Build output
+Debug/
+Release/
+build/
+
+# Object files
+*.o
+*.d
+
+# Compiled binaries
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# IDE files (STM32CubeIDE)
+.settings/
+.cproject
+.project
+
+# STM32CubeIDE workspace metadata
+*.launch
+
+# Eclipse
+*.pydevproject
+
+# Windows
+Thumbs.db
+desktop.ini
