@@ -13,8 +13,10 @@
 /* USER CODE BEGIN Includes */
 #include "I2C_LCD.h"
 #include "string.h"
+#include <stdio.h>
 #include "SERVO.h"
 #include "rc522.h"
+#include "uart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -54,7 +56,7 @@ TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN PV */
 static uchar authorizedCards[MAX_AUTHORIZED_CARDS][4] = {
     {0x62, 0x99, 0x18, 0x02},
-    {0xE9, 0x11, 0x0B, 0x01}
+    {0x11, 0x22, 0x33, 0x44}
 };
 static uint8_t numAuthorizedCards = 2;
 /* USER CODE END PV */
@@ -77,10 +79,23 @@ static void Barrier_OpenThenClose(void);
 static uchar CompareUID(uchar *scannedUID, uchar *storedUID);
 static uchar IsAuthorizedCard(uchar *scannedUID);
 static void RFID_ProcessCard(void);
+static void DebugPrintUID(const uchar *uid, uint8_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void DebugPrintUID(const uchar *uid, uint8_t len)
+{
+    uart_write_str("UID:");
+    for (uint8_t i = 0; i < len; i++)
+    {
+        char buffer[4];
+        snprintf(buffer, sizeof(buffer), "%02X ", uid[i]);
+        uart_write_str(buffer);
+    }
+    uart_write_str("\r\n");
+}
+
 static void LED_AllOff(void)
 {
     HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, GPIO_PIN_RESET);
@@ -106,7 +121,7 @@ static void ShowIdleScreen(void)
     I2C_LCD_SetCursor(MyI2C_LCD, 0, 0);
     I2C_LCD_WriteString(MyI2C_LCD, "Quet the RFID");
     I2C_LCD_SetCursor(MyI2C_LCD, 0, 1);
-    I2C_LCD_WriteString(MyI2C_LCD, "Cho phep vao");
+    I2C_LCD_WriteString(MyI2C_LCD, "Moi quet the...");
 }
 
 static void Barrier_OpenThenClose(void)
@@ -144,7 +159,7 @@ static void RFID_ProcessCard(void)
 {
     uchar status;
     uchar tagType[2];
-    uchar serNum[5];
+  uchar serNum[5] = {0};
 
     status = MFRC522_Request(PICC_REQIDL, tagType);
     if (status != MI_OK)
@@ -161,6 +176,8 @@ static void RFID_ProcessCard(void)
     if (IsAuthorizedCard(serNum))
     {
         LED_GreenOn();
+        uart_write_str("CARD OK\r\n");
+        DebugPrintUID(serNum, 4);
         I2C_LCD_Clear(MyI2C_LCD);
         I2C_LCD_WriteString(MyI2C_LCD, "Welcome");
         I2C_LCD_SetCursor(MyI2C_LCD, 0, 1);
@@ -175,6 +192,8 @@ static void RFID_ProcessCard(void)
     else
     {
         LED_RedOn();
+        uart_write_str("CARD DENIED\r\n");
+        DebugPrintUID(serNum, 4);
         I2C_LCD_Clear(MyI2C_LCD);
         I2C_LCD_WriteString(MyI2C_LCD, "Sai The");
         I2C_LCD_SetCursor(MyI2C_LCD, 0, 1);
@@ -190,14 +209,22 @@ static void RFID_ProcessCard(void)
 
 static void Tone(uint32_t Frequency, uint32_t Duration)
 {
-    TIM2->ARR = (1000000UL / Frequency) - 1;
-    TIM2->CCR3 = (TIM2->ARR >> 1);
+    uint32_t autoReload = (1000000UL / Frequency) - 1;
+
+    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_3);
+    __HAL_TIM_SET_AUTORELOAD(&htim2, autoReload);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, (autoReload >> 1));
+    __HAL_TIM_SET_COUNTER(&htim2, 0);
+    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
     HAL_Delay(Duration);
 }
 
 static void noTone(void)
 {
-    TIM2->CCR3 = 0;
+    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_3);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
+    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
 }
 /* USER CODE END 0 */
 
@@ -231,9 +258,9 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_SPI2_Init();
+  USART1_Init();
   /* USER CODE BEGIN 2 */
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     SERVO_Init(SERVO_Motor1);
     SERVO_MoveTo(SERVO_Motor1, BARRIER_CLOSE_ANGLE);
     I2C_LCD_Init(MyI2C_LCD);
@@ -241,6 +268,7 @@ int main(void)
     I2C_LCD_Display(MyI2C_LCD);
     LED_AllOff();
     MFRC522_Init();
+    uart_write_str("RFID ready\r\n");
     ShowIdleScreen();
   /* USER CODE END 2 */
 
@@ -353,7 +381,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -523,7 +551,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
   /* LED xanh PA4, LED do PA5 */
   GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;

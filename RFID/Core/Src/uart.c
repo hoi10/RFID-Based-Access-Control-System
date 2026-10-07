@@ -1,87 +1,49 @@
-/*
- * uart.c
- *
- *  Created on: Sep 22, 2024
- *      Author: guilherme
- */
 #include "uart.h"
 
-
-#include <stdint.h>
-#include "stm32f1xx.h"
-
-
-
-uint8_t *ptr;
-
-void USART1_Init(){
-
-	GPIOA->CRH &= 0xFFFFFF0F;
-	GPIOA->CRH |= 0x000000B0;
-	//enable clock access to USART1
-	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
-
-	//Transmit Enable
-	USART1->CR1 |= USART_CR1_TE;
-
-	//Set Baud Rate
-	USART1->BRR = ((CPU_CLK + (BaudRate/2U))/BaudRate);
-
-	//Enable UART
-	USART1->CR1 |= USART_CR1_UE;
-
-	//Enable USART1 interrupt in NVIC
-	NVIC_EnableIRQ(USART1_IRQn);
-}
-void USART1_IRQHandler(void)
+void USART1_Init(void)
 {
-	GPIOB->ODR |= 0x00000100;
-	if((USART1->SR&USART_SR_TXE))
-	{
-		if(*ptr)
-		{
-			USART1->DR	=  (*ptr & 0xFF);
-			ptr++;
-		}
-		else
-			USART1->CR1 &= ~USART_CR1_TXEIE; //At end of MSG, disable interrupt
-	}
-	GPIOB->ODR &= ~0x00000100;
-}
+    // Enable GPIOA clock and USART1 clock
+    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_USART1EN;
 
-void uart_write(uint8_t *ch)
-{
-	//Make sure the transmit data register is empty
-	while(!(USART1->SR & USART_SR_TXE)){}
-	//Send first byte
-	USART1->DR	=  (*ch & 0xFF);
-	//Update Global ptr
-	ptr = ch+1;
+    // Configure PA9 (TX) as Alternate function push-pull (0x0B)
+    // Configure PA10 (RX) as Input floating (0x04)
+    GPIOA->CRH &= ~(0xFFU << 4);
+    GPIOA->CRH |= (0x4BU << 4);
 
-	//Enable TXE interrupt
-	USART1->CR1 |= USART_CR1_TXEIE;
-}
-
-void int_to_string(uint8_t* data, int size, uint8_t* str) {
-    int index = 0;
-
-    for (int i = 0; i < size; i++) {
-        uint8_t num = data[i];
-        if (num < 10) {
-            str[index++] = num + '0';
-        } else if (num < 100) {
-            str[index++] = (num / 10) + '0';
-            str[index++] = (num % 10) + '0';
-        } else {
-            str[index++] = (num / 100) + '0';
-            str[index++] = ((num / 10) % 10) + '0';
-            str[index++] = (num % 10) + '0';
-        }
-        if (i < size - 1) {
-            str[index++] = '-';
-        }
+    // Baud rate 9600 bps (Standard for Proteus Virtual Terminal)
+    uint32_t pclk2 = SystemCoreClock;
+    if (pclk2 == 0)
+    {
+        pclk2 = 72000000UL;
     }
+    USART1->BRR = (pclk2 + (9600 / 2)) / 9600;
 
-    str[index] = '\0';
+    // Enable Transmitter, Receiver and USART
+    USART1->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
 }
 
+void uart_write_char(char c)
+{
+    while (!(USART1->SR & USART_SR_TXE))
+    {
+    }
+    USART1->DR = (uint8_t)c;
+}
+
+void uart_write_str(const char *str)
+{
+    while (*str)
+    {
+        uart_write_char(*str++);
+    }
+}
+
+int uart_read_char(uint8_t *ch)
+{
+    if (USART1->SR & USART_SR_RXNE)
+    {
+        *ch = (uint8_t)(USART1->DR & 0xFF);
+        return 1;
+    }
+    return 0;
+}

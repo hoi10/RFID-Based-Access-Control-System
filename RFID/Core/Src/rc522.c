@@ -1,17 +1,27 @@
 #include "rc522.h"
 
-/*
- * Function Name: RC522_SPI_Transfer
- * Description: A common function used by Write_MFRC522 and Read_MFRC522
- * Input Parameters: data - the value to be written
- * Returns: a byte of data read from the module
- */
-uint8_t RC522_SPI_Transfer(uchar data)
+static uchar RC522_SPI_Transfer(uchar data)
 {
-	uchar rx_data;
-	HAL_SPI_TransmitReceive(HSPI_INSTANCE,&data,&rx_data,1,100);
+    uchar received = 0;
 
-	return rx_data;
+    for (uchar mask = 0x80; mask != 0; mask >>= 1)
+    {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, (data & mask) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        for (volatile uint8_t settle = 0; settle < 4; settle++)
+        {
+            __NOP();
+        }
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
+        for (volatile uint8_t settle = 0; settle < 4; settle++)
+        {
+            __NOP();
+        }
+        received = (received << 1) | (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == GPIO_PIN_SET);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
+    }
+
+    return received;
 }
 
 /*
@@ -24,15 +34,8 @@ void Write_MFRC522(uchar addr, uchar val)
 {
 	/* CS LOW */
 	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_RESET);
-
-	  // even though we are calling transfer frame once, we are really sending
-	  // two 8-bit frames smooshed together-- sending two 8 bit frames back to back
-	  // results in a spike in the select line which will jack with transactions
-	  // - top 8 bits are the address. Per the spec, we shift the address left
-	  //   1 bit, clear the LSb, and clear the MSb to indicate a write
-	  // - bottom 8 bits are the data bits being sent for that address, we send them
-	RC522_SPI_Transfer((addr<<1)&0x7E);
-	RC522_SPI_Transfer(val);
+    RC522_SPI_Transfer((addr << 1) & 0x7E);
+    RC522_SPI_Transfer(val);
 
 	/* CS HIGH */
 	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
@@ -46,25 +49,29 @@ void Write_MFRC522(uchar addr, uchar val)
  */
 uchar Read_MFRC522(uchar addr)
 {
-	uchar val;
+    uchar val;
 
 	/* CS LOW */
 	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_RESET);
-
-	  // even though we are calling transfer frame once, we are really sending
-	  // two 8-bit frames smooshed together-- sending two 8 bit frames back to back
-	  // results in a spike in the select line which will jack with transactions
-	  // - top 8 bits are the address. Per the spec, we shift the address left
-	  //   1 bit, clear the LSb, and set the MSb to indicate a read
-	  // - bottom 8 bits are all 0s on a read per 8.1.2.1 Table 6
-	RC522_SPI_Transfer(((addr<<1)&0x7E) | 0x80);
-	val = RC522_SPI_Transfer(0x00);
+    RC522_SPI_Transfer(((addr << 1) & 0x7E) | 0x80);
+    val = RC522_SPI_Transfer(0x00);
 
 	/* CS HIGH */
 	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
 
-	return val;
+    return val;
 
+}
+
+static void Read_MFRC522_FIFO(uchar *buffer, uchar length)
+{
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+    RC522_SPI_Transfer(((FIFODataReg << 1) & 0x7E) | 0x80);
+    for (uchar i = 0; i < length; i++)
+    {
+        buffer[i] = RC522_SPI_Transfer(0x00);
+    }
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
 }
 
 /*
@@ -136,9 +143,27 @@ void MFRC522_Reset(void)
 */
 void MFRC522_Init(void)
 {
+    GPIO_InitTypeDef gpioInit = {0};
+
+    __HAL_SPI_DISABLE(HSPI_INSTANCE);
+    gpioInit.Pin = GPIO_PIN_13 | GPIO_PIN_15;
+    gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
+    gpioInit.Pull = GPIO_NOPULL;
+    gpioInit.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOB, &gpioInit);
+    gpioInit.Pin = GPIO_PIN_14;
+    gpioInit.Mode = GPIO_MODE_INPUT;
+    gpioInit.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOB, &gpioInit);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13 | GPIO_PIN_15, GPIO_PIN_RESET);
+
 	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MFRC522_RST_PORT,MFRC522_RST_PIN,GPIO_PIN_RESET);
+    HAL_Delay(5);
 	HAL_GPIO_WritePin(MFRC522_RST_PORT,MFRC522_RST_PIN,GPIO_PIN_SET);
+    HAL_Delay(50);
 	MFRC522_Reset();
+    HAL_Delay(5);
 
 	//Timer: TPrescaler*TreloadVal/6.78MHz = 24ms
 	Write_MFRC522(TModeReg, 0x8D);		//Tauto=1; f(Timer) = 6.78MHz/TPreScaler
@@ -253,11 +278,7 @@ uchar MFRC522_ToCard(uchar command, uchar *sendData, uchar sendLen, uchar *backD
 					n = MAX_LEN;
 				}
 
-                // Reading the received data in FIFO
-                for (i=0; i<n; i++)
-                {
-					backData[i] = Read_MFRC522(FIFODataReg);
-				}
+                Read_MFRC522_FIFO(backData, n);
             }
         }
         else
@@ -314,29 +335,30 @@ uchar MFRC522_Anticoll(uchar *serNum)
     uchar status;
     uchar i;
 	uchar serNumCheck=0;
-    uint unLen;
+    uint unLen = 0;
 
 	Write_MFRC522(BitFramingReg, 0x00);		//TxLastBists = BitFramingReg[2..0]
 
     serNum[0] = PICC_ANTICOLL;
     serNum[1] = 0x20;
     status = MFRC522_ToCard(PCD_TRANSCEIVE, serNum, 2, serNum, &unLen);
-
-    if (status == MI_OK)
-	{
-    	 //Check card serial number
-		for (i=0; i<4; i++)
-		{
-		 	serNumCheck ^= serNum[i];
-		}
-		if (serNumCheck != serNum[i])
-		{
-			status = MI_ERR;
-		}
+    if (status != MI_OK)
+    {
+        return MI_NOTAGERR;
     }
 
-    return status;
+    for (i=0; i<4; i++)
+	{
+        serNumCheck ^= serNum[i];
+    }
+    if (serNumCheck != serNum[4])
+    {
+        return MI_ERR;
+    }
+
+    return MI_OK;
 }
+
 
 /*
  * Function Name: CalulateCRC
