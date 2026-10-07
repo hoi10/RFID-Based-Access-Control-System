@@ -2,12 +2,9 @@
 
 #define	uchar	unsigned char
 #define	uint	unsigned int
-extern SPI_HandleTypeDef hspi2;
-
 //Maximum length of the array
 #define MAX_LEN 16
 
-#define HSPI_INSTANCE				&hspi2
 #define MFRC522_CS_PORT				GPIOB
 #define MFRC522_CS_PIN				GPIO_PIN_12
 #define MFRC522_RST_PORT			GPIOB

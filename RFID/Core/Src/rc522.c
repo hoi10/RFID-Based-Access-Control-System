@@ -145,7 +145,8 @@ void MFRC522_Init(void)
 {
     GPIO_InitTypeDef gpioInit = {0};
 
-    __HAL_SPI_DISABLE(HSPI_INSTANCE);
+    __HAL_RCC_SPI2_CLK_ENABLE();
+    SPI2->CR1 &= ~SPI_CR1_SPE;
     gpioInit.Pin = GPIO_PIN_13 | GPIO_PIN_15;
     gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
     gpioInit.Pull = GPIO_NOPULL;

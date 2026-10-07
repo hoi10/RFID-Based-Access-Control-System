@@ -12,11 +12,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "I2C_LCD.h"
-#include "string.h"
-#include <stdio.h>
 #include "SERVO.h"
 #include "rc522.h"
 #include "uart.h"
+#include "DWT_Delay.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,8 +47,6 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 
-SPI_HandleTypeDef hspi2;
-
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
@@ -65,9 +62,6 @@ static uint8_t numAuthorizedCards = 2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_TIM2_Init(void);
-static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
 static void Tone(uint32_t Frequency, uint32_t Duration);
 static void noTone(void);
@@ -75,6 +69,7 @@ static void LED_AllOff(void);
 static void LED_GreenOn(void);
 static void LED_RedOn(void);
 static void ShowIdleScreen(void);
+static void Buzzer_Init(void);
 static void Barrier_OpenThenClose(void);
 static uchar CompareUID(uchar *scannedUID, uchar *storedUID);
 static uchar IsAuthorizedCard(uchar *scannedUID);
@@ -86,11 +81,16 @@ static void DebugPrintUID(const uchar *uid, uint8_t len);
 /* USER CODE BEGIN 0 */
 static void DebugPrintUID(const uchar *uid, uint8_t len)
 {
+  static const char hexDigits[] = "0123456789ABCDEF";
     uart_write_str("UID:");
     for (uint8_t i = 0; i < len; i++)
     {
-        char buffer[4];
-        snprintf(buffer, sizeof(buffer), "%02X ", uid[i]);
+    char buffer[4] = {
+      hexDigits[uid[i] >> 4],
+      hexDigits[uid[i] & 0x0F],
+      ' ',
+      '\0'
+    };
         uart_write_str(buffer);
     }
     uart_write_str("\r\n");
@@ -207,24 +207,42 @@ static void RFID_ProcessCard(void)
     MFRC522_Halt();
 }
 
+static void Buzzer_Init(void)
+{
+    GPIO_InitTypeDef gpioInit = {0};
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    gpioInit.Pin = GPIO_PIN_2;
+    gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
+    gpioInit.Pull = GPIO_NOPULL;
+    gpioInit.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &gpioInit);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+    DWT_Delay_Init();
+}
+
 static void Tone(uint32_t Frequency, uint32_t Duration)
 {
-    uint32_t autoReload = (1000000UL / Frequency) - 1;
+    if ((Frequency == 0) || (Duration == 0))
+    {
+        return;
+    }
 
-    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_3);
-    __HAL_TIM_SET_AUTORELOAD(&htim2, autoReload);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, (autoReload >> 1));
-    __HAL_TIM_SET_COUNTER(&htim2, 0);
-    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-    HAL_Delay(Duration);
+    uint32_t halfPeriodUs = 500000UL / Frequency;
+    uint32_t cycles = (Frequency * Duration + 500UL) / 1000UL;
+
+    for (uint32_t i = 0; i < cycles; i++)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+        DWT_Delay_us(halfPeriodUs);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+        DWT_Delay_us(halfPeriodUs);
+    }
 }
 
 static void noTone(void)
 {
-    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_3);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, 0);
-    __HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_UPDATE);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
 }
 /* USER CODE END 0 */
 
@@ -255,12 +273,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C1_Init();
-  MX_TIM1_Init();
-  MX_TIM2_Init();
-  MX_SPI2_Init();
   USART1_Init();
   /* USER CODE BEGIN 2 */
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+    Buzzer_Init();
+    Tone(1000, 150);
+    noTone();
     SERVO_Init(SERVO_Motor1);
     SERVO_MoveTo(SERVO_Motor1, BARRIER_CLOSE_ANGLE);
     I2C_LCD_Init(MyI2C_LCD);
@@ -355,182 +372,6 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief SPI2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI2_Init(void)
-{
-
-  /* USER CODE BEGIN SPI2_Init 0 */
-
-  /* USER CODE END SPI2_Init 0 */
-
-  /* USER CODE BEGIN SPI2_Init 1 */
-
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI2_Init 2 */
-
-  /* USER CODE END SPI2_Init 2 */
-
-}
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_SET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-  HAL_TIM_MspPostInit(&htim1);
-
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 71;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 65535;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
 
 }
 
