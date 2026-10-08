@@ -14,13 +14,12 @@ build/
 *.map
 *.lst
 
-# IDE files (STM32CubeIDE)
-.settings/
-.cproject
-.project
+# STM32CubeIDE project configuration
+# Keep .project, .cproject, and .settings/ in Git so the project imports consistently.
 
-# STM32CubeIDE workspace metadata
+# Keep the project's portable debug configuration; ignore other local launch configs.
 *.launch
+!RFID.launch
 
 # Eclipse
 *.pydevproject
