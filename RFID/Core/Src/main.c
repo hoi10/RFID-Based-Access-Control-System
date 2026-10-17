@@ -48,11 +48,16 @@ static void CardDisplayTask(void *argument)
 
     for (;;)
     {
-        if (xQueueReceive(cardQueue, &event, portMAX_DELAY) != pdPASS)
+        App_ProcessUart();
+        if (App_PollEmergencyButton())
         {
-            Error_Handler();
+            event.type = APP_EVENT_EMERGENCY_OPEN;
+            App_HandleCard(&event);
         }
-        App_HandleCard(&event);
+        if (xQueueReceive(cardQueue, &event, pdMS_TO_TICKS(20)) == pdPASS)
+        {
+            App_HandleCard(&event);
+        }
     }
 }
 
@@ -97,10 +102,17 @@ int main(void)
     {
 #if !APP_USE_FREERTOS
         AppCardEvent event;
-        if (App_RFIDPoll(&event))
+        App_ProcessUart();
+        if (App_PollEmergencyButton())
+        {
+            event.type = APP_EVENT_EMERGENCY_OPEN;
+            App_HandleCard(&event);
+        }
+        else if (App_RFIDPoll(&event))
         {
             App_HandleCard(&event);
         }
+        App_ProcessUart();
         HAL_Delay(80);
 #else
         __WFI();
@@ -163,6 +175,7 @@ static void MX_GPIO_Init(void)
     __HAL_RCC_GPIOD_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_AFIO_CLK_ENABLE();
 
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4 | GPIO_PIN_5, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
@@ -179,6 +192,15 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    AFIO->EXTICR[0] = (AFIO->EXTICR[0] & ~AFIO_EXTICR1_EXTI1) |
+                      AFIO_EXTICR1_EXTI1_PB;
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_NVIC_SetPriority(EXTI1_IRQn, 7, 0);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
     GPIO_InitStruct.Pin = GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;

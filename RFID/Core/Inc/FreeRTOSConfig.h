@@ -44,6 +44,7 @@
 #define INCLUDE_vTaskDelay                      1
 #define INCLUDE_vTaskSuspend                    1
 #define INCLUDE_vTaskDelete                     1
+#define INCLUDE_xTaskGetSchedulerState          1
 
 #define configASSERT(condition)                 \
     do                                           \

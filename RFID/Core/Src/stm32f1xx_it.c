@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app_config.h"
+#include "app.h"
+#include "uart.h"
 #if APP_USE_FREERTOS
 #include "FreeRTOS.h"
 extern void xPortSysTickHandler(void);
@@ -211,5 +213,22 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+void USART1_IRQHandler(void)
+{
+  if (USART1->SR & USART_SR_RXNE)
+  {
+    uart_rx_irq_handler();
+  }
+}
+
+void EXTI1_IRQHandler(void)
+{
+  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_1) != RESET)
+  {
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_1);
+    EXTI->IMR &= ~GPIO_PIN_1;
+    App_EmergencyButtonIRQ();
+  }
+}
 
 /* USER CODE END 1 */

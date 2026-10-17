@@ -8,6 +8,7 @@
     { "type": "wokwi-lcd1602", "id": "lcd", "top": -120, "left": 180, "attrs": { "pins": "i2c" } },
     { "type": "wokwi-servo", "id": "servo", "top": 450, "left": 120, "attrs": {} },
     { "type": "wokwi-buzzer", "id": "buzzer", "top": 450, "left": 360, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "emergency", "top": 320, "left": 30, "attrs": { "color": "red", "label": "Emergency" } },
     { "type": "wokwi-led", "id": "led_green", "top": -30, "left": 20, "attrs": { "color": "green", "label": "Green" } },
     { "type": "wokwi-led", "id": "led_red", "top": -30, "left": 80, "attrs": { "color": "red", "label": "Red" } }
   ],
@@ -29,6 +30,9 @@
 
     [ "led_red:A", "stm32:A5", "red", [ "v0" ] ],
     [ "led_red:C", "stm32:GND.1", "black", [ "v0" ] ],
+
+    [ "emergency:1.l", "stm32:B1", "orange", [ "v0" ] ],
+    [ "emergency:2.l", "stm32:GND.1", "black", [ "v0" ] ],
 
     [ "rfid:3.3V", "stm32:3V3.1", "red", [ "v0" ] ],
     [ "rfid:RST", "stm32:B0", "gray", [ "v0" ] ],
