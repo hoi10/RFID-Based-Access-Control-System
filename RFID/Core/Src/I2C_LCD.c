@@ -12,7 +12,7 @@
 
 #include "I2C_LCD.h"
 #include "I2C_LCD_cfg.h"
-#include "Util.h"
+#include "DWT_Delay.h"
 
 /*-----------------------[INTERNAL DEFINITIONS]-----------------------*/
 // CMD
@@ -61,7 +61,8 @@ typedef struct I2C_LCD_InfoParam_s
 {
     uint8_t DisplayCtrl;
     uint8_t BacklightVal;
-}I2C_LCD_InfoParam_t;
+    uint8_t DeviceAddress;
+} I2C_LCD_InfoParam_t;
 
 static I2C_LCD_InfoParam_t I2C_LCD_InfoParam_g[I2C_LCD_MAX];
 
@@ -70,79 +71,101 @@ static I2C_LCD_InfoParam_t I2C_LCD_InfoParam_g[I2C_LCD_MAX];
 static void I2C_LCD_ExpanderWrite(uint8_t I2C_LCD_InstanceIndex, uint8_t DATA)
 {
     uint8_t TxData = (DATA) | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].BacklightVal;
-    HAL_I2C_Master_Transmit(I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_Handle, (I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_LCD_Address<<1), &TxData, sizeof(TxData), 100);
+    uint8_t addr = I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DeviceAddress;
+    HAL_I2C_Master_Transmit(I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_Handle, addr, &TxData, 1, 20);
 }
 
 static void I2C_LCD_EnPulse(uint8_t I2C_LCD_InstanceIndex, uint8_t DATA)
 {
-	I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, (DATA | EN)); // En high
-	DELAY_US(2); // enable pulse must be >450ns
+    I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, (DATA | EN)); // En high
+    DWT_Delay_us(2); // Enable pulse width > 450ns
 
     I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, (DATA & ~EN)); // En low
-    DELAY_US(50); // commands need > 37us to settle
+    DWT_Delay_us(40); // Command execution time > 37us
 }
 
-static void I2C_LCD_Write4Bits(uint8_t I2C_LCD_InstanceIndex, uint8_t Val)
+// Gửi chính xác 1 nibble (4-bit) duy nhất - Dùng riêng cho chuỗi khởi tạo chuyển sang 4-bit mode
+static void I2C_LCD_WriteNibble(uint8_t I2C_LCD_InstanceIndex, uint8_t Val, uint8_t Mode)
 {
-	I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, Val);
-	I2C_LCD_EnPulse(I2C_LCD_InstanceIndex, Val);
+    uint8_t HighNib = (Val & 0xF0) | Mode;
+    I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, HighNib);
+    I2C_LCD_EnPulse(I2C_LCD_InstanceIndex, HighNib);
 }
 
+// Gửi 1 byte (2 nibbles: High trước, Low sau)
 static void I2C_LCD_Send(uint8_t I2C_LCD_InstanceIndex, uint8_t Val, uint8_t Mode)
 {
-    uint8_t HighNib = Val & 0xF0;
-    uint8_t LowNib = (Val << 4) & 0xF0;
-    I2C_LCD_Write4Bits(I2C_LCD_InstanceIndex, (HighNib) | Mode);
-    I2C_LCD_Write4Bits(I2C_LCD_InstanceIndex, (LowNib) | Mode);
+    uint8_t HighNib = (Val & 0xF0) | Mode;
+    uint8_t LowNib = ((Val << 4) & 0xF0) | Mode;
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, HighNib, Mode);
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, LowNib, Mode);
 }
 
 static void I2C_LCD_Cmd(uint8_t I2C_LCD_InstanceIndex, uint8_t CMD)
 {
-	I2C_LCD_Send(I2C_LCD_InstanceIndex, CMD, 0);
+    I2C_LCD_Send(I2C_LCD_InstanceIndex, CMD, 0);
 }
 
 static void I2C_LCD_Data(uint8_t I2C_LCD_InstanceIndex, uint8_t DATA)
 {
-	I2C_LCD_Send(I2C_LCD_InstanceIndex, DATA, 1);
+    I2C_LCD_Send(I2C_LCD_InstanceIndex, DATA, RS);
 }
-
-/*-----------------------------------------------------------------------*/
-
-//=========================================================================================================================
 
 /*-----------------------[USER EXTERNAL FUNCTIONS]-----------------------*/
 
 void I2C_LCD_Init(uint8_t I2C_LCD_InstanceIndex)
 {
-	// According To Datasheet, We Must Wait At Least 40ms After Power Up Before Interacting With The LCD Module
-	while(HAL_GetTick() < 50);
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, 0x30);
-    DELAY_MS(5);  // Delay > 4.1ms
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, 0x30);
-    DELAY_MS(5);  // Delay > 4.1ms
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, 0x30);
-    DELAY_US(150);  // Delay > 100μs
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, 0x02);
-    // Configure the LCD
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_FUNCTIONSET | LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS);
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF);
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_ENTRYMODESET | LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT);
-    I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+    // Đợi điện áp LCD ổn định (>40ms theo datasheet HD44780)
+    HAL_Delay(50);
+
+    // Tự động quét địa chỉ 0x27 hoặc 0x3F để phù hợp cả chip PCF8574T và PCF8574AT
+    I2C_HandleTypeDef *hi2c = I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_Handle;
+    uint8_t detectedAddr = (I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_LCD_Address << 1);
+
+    if (HAL_I2C_IsDeviceReady(hi2c, (0x27 << 1), 2, 5) == HAL_OK)
+    {
+        detectedAddr = (0x27 << 1);
+    }
+    else if (HAL_I2C_IsDeviceReady(hi2c, (0x3F << 1), 2, 5) == HAL_OK)
+    {
+        detectedAddr = (0x3F << 1);
+    }
+    I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DeviceAddress = detectedAddr;
     I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].BacklightVal = LCD_BACKLIGHT;
-    // Clear the LCD
+
+    // Chuẩn Hitachi HD44780: Chuyển từ chế độ 8-bit ban đầu sang 4-bit mode
+    // Bước 1: Gửi 3 lần bán byte 0x30 (chỉ 1 xung EN mỗi lần)
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, 0x30, 0);
+    HAL_Delay(5); // Chờ > 4.1ms
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, 0x30, 0);
+    HAL_Delay(1); // Chờ > 100us
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, 0x30, 0);
+    HAL_Delay(1);
+
+    // Bước 2: Gửi bán byte 0x20 để chốt vào 4-bit mode (BẮT BUỘC chỉ 1 nibble!)
+    I2C_LCD_WriteNibble(I2C_LCD_InstanceIndex, 0x20, 0);
+    HAL_Delay(1);
+
+    // Bước 3: Từ đây LCD đã ở 4-bit mode, cấu hình các tham số hiển thị
+    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_FUNCTIONSET | LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS); // 0x28
+    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF); // 0x0C
+    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_ENTRYMODESET | LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT); // 0x06
+    I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+
+    // Xóa trắng màn hình và đưa con trỏ về gốc
     I2C_LCD_Clear(I2C_LCD_InstanceIndex);
 }
 
 void I2C_LCD_Clear(uint8_t I2C_LCD_InstanceIndex)
 {
     I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_CLEARDISPLAY);
-    DELAY_MS(2);
+    HAL_Delay(2);
 }
 
 void I2C_LCD_Home(uint8_t I2C_LCD_InstanceIndex)
 {
     I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_RETURNHOME);
-    DELAY_MS(2);
+    HAL_Delay(2);
 }
 
 void I2C_LCD_SetCursor(uint8_t I2C_LCD_InstanceIndex, uint8_t Col, uint8_t Row)

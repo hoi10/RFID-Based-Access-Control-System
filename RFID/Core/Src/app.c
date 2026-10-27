@@ -24,6 +24,9 @@
 #define LED_RED_PORT GPIOA
 #define LED_RED_PIN GPIO_PIN_5
 
+#define BUZZER_PORT GPIOB
+#define BUZZER_PIN GPIO_PIN_10
+
 #define BARRIER_OPEN_ANGLE 90.0f
 #define BARRIER_CLOSE_ANGLE 0.0f
 #define BARRIER_OPEN_MS 2500
@@ -117,6 +120,7 @@ static void App_DelayMs(uint32_t ms)
     }
 }
 
+// Phát âm thanh còi Buzzer (hỗ trợ cả còi thụ động passive và còi chủ động active)
 static void Tone(uint32_t frequency, uint32_t duration)
 {
     if ((frequency == 0) || (duration == 0))
@@ -129,16 +133,16 @@ static void Tone(uint32_t frequency, uint32_t duration)
 
     for (uint32_t i = 0; i < cycles; i++)
     {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
         DWT_Delay_us(halfPeriodUs);
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
         DWT_Delay_us(halfPeriodUs);
     }
 }
 
 static void noTone(void)
 {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
 }
 
 static void LED_AllOff(void)
@@ -173,13 +177,13 @@ static void Buzzer_Init(void)
 {
     GPIO_InitTypeDef gpioInit = {0};
 
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    gpioInit.Pin = GPIO_PIN_2;
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    gpioInit.Pin = BUZZER_PIN;
     gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
     gpioInit.Pull = GPIO_NOPULL;
     gpioInit.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &gpioInit);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
+    HAL_GPIO_Init(BUZZER_PORT, &gpioInit);
+    HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
     DWT_Delay_Init();
 }
 
@@ -699,18 +703,43 @@ void App_Init(void)
         Error_Handler();
     }
 #endif
+    // 1. Khởi tạo Buzzer (PB10)
     Buzzer_Init();
-    Tone(1000, 150);
+
+    // 2. Tự kiểm tra phần cứng: Bật cả 2 LED xanh & đỏ trong 200ms kèm 1 tiếng bíp ngắn
+    // Giúp người dùng ngay lập tức xác nhận MCU, LED và Buzzer đều hoạt động bình thường
+    HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_RED_PORT, LED_RED_PIN, GPIO_PIN_SET);
+    Tone(1000, 100);
     noTone();
+    HAL_Delay(150);
+    LED_AllOff();
+
+    // 3. Khởi tạo Servo chắn barie
     SERVO_Init(SERVO_Motor1);
     SERVO_MoveTo(SERVO_Motor1, BARRIER_CLOSE_ANGLE);
+
+    // 4. Khởi tạo màn hình LCD 16x2 I2C
     I2C_LCD_Init(MyI2C_LCD);
     I2C_LCD_Backlight(MyI2C_LCD);
     I2C_LCD_Display(MyI2C_LCD);
-    LED_AllOff();
+    I2C_LCD_Clear(MyI2C_LCD);
+    I2C_LCD_SetCursor(MyI2C_LCD, 0, 0);
+    I2C_LCD_WriteString(MyI2C_LCD, "Dang khoi dong..");
+
+    // 5. Khởi tạo module đọc thẻ RFID RC522 và kiểm tra phiên bản
     MFRC522_Init();
-    UART_Write("RFID ready\r\n");
-    UART_Write("Send HELP for UART commands\r\n");
+    uchar rc522_ver = MFRC522_ReadVersion();
+    char verMsg[48];
+    (void)snprintf(verMsg, sizeof(verMsg), "RC522 Ver: 0x%02X%s\r\n", rc522_ver,
+                   (rc522_ver == 0x92 || rc522_ver == 0x91 || rc522_ver == 0x12) ? " (OK)" : " (ERR: Kiem tra day noi!)");
+    UART_Write(verMsg);
+
+    UART_Write("RFID System Ready!\r\n");
+    UART_Write("Gui HELP de xem danh sach lenh UART\r\n");
+
+    // 6. Hiển thị màn hình chờ sẵn sàng quẹt thẻ
+    HAL_Delay(400);
     ShowIdleScreen();
 }
 

@@ -8,12 +8,12 @@ static uchar RC522_SPI_Transfer(uchar data)
     {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, (data & mask) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        for (volatile uint8_t settle = 0; settle < 4; settle++)
+        for (volatile uint8_t settle = 0; settle < 8; settle++)
         {
             __NOP();
         }
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
-        for (volatile uint8_t settle = 0; settle < 4; settle++)
+        for (volatile uint8_t settle = 0; settle < 8; settle++)
         {
             __NOP();
         }
@@ -141,41 +141,57 @@ void MFRC522_Reset(void)
  * Input: None
  * Return value: None
 */
+uchar MFRC522_ReadVersion(void)
+{
+    return Read_MFRC522(VersionReg);
+}
+
 void MFRC522_Init(void)
 {
     GPIO_InitTypeDef gpioInit = {0};
 
+    __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_SPI2_CLK_ENABLE();
     SPI2->CR1 &= ~SPI_CR1_SPE;
+
     gpioInit.Pin = GPIO_PIN_13 | GPIO_PIN_15;
     gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
     gpioInit.Pull = GPIO_NOPULL;
     gpioInit.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOB, &gpioInit);
+
     gpioInit.Pin = GPIO_PIN_14;
     gpioInit.Mode = GPIO_MODE_INPUT;
     gpioInit.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOB, &gpioInit);
+
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13 | GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
 
-	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
-    HAL_GPIO_WritePin(MFRC522_RST_PORT,MFRC522_RST_PIN,GPIO_PIN_RESET);
-    HAL_Delay(5);
-	HAL_GPIO_WritePin(MFRC522_RST_PORT,MFRC522_RST_PIN,GPIO_PIN_SET);
+    // Hard reset RC522: kéo RST xuống LOW rồi lên HIGH
+    HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_RESET);
+    HAL_Delay(10);
+    HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_SET);
     HAL_Delay(50);
-	MFRC522_Reset();
-    HAL_Delay(5);
 
-	//Timer: TPrescaler*TreloadVal/6.78MHz = 24ms
-	Write_MFRC522(TModeReg, 0x8D);		//Tauto=1; f(Timer) = 6.78MHz/TPreScaler
-	Write_MFRC522(TPrescalerReg, 0x3E);	//TModeReg[3..0] + TPrescalerReg
-	Write_MFRC522(TReloadRegL, 30);
-	Write_MFRC522(TReloadRegH, 0);
+    // Soft reset
+    MFRC522_Reset();
+    HAL_Delay(10);
 
-	Write_MFRC522(TxAutoReg, 0x40);		// force 100% ASK modulation
-	Write_MFRC522(ModeReg, 0x3D);		// CRC Initial value 0x6363
+    // Cấu hình Timer: TPrescaler*TreloadVal/6.78MHz = ~25ms
+    Write_MFRC522(TModeReg, 0x8D);      // Tauto=1
+    Write_MFRC522(TPrescalerReg, 0x3E);
+    Write_MFRC522(TReloadRegL, 30);
+    Write_MFRC522(TReloadRegH, 0);
 
-	AntennaOn();
+    Write_MFRC522(TxAutoReg, 0x40);     // 100% ASK modulation
+    Write_MFRC522(ModeReg, 0x3D);       // CRC initial 0x6363
+
+    // Cấu hình độ nhạy Anten tối đa (RxGain = 48dB) giúp nhận thẻ xa và nhạy hơn
+    SetBitMask(RFCfgReg, 0x70);
+
+    // Bật anten phát trường RF
+    AntennaOn();
 }
 
 /*
