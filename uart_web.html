@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STM32 UART Console</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #ffffff;
+      color: #1e293b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 32px 16px;
+      background: #ffffff;
+    }
+
+    main {
+      width: min(850px, 100%);
+      margin: 0 auto;
+    }
+
+    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 4vw, 2rem); }
+    .subtitle { margin: 0 0 24px; color: #64748b; }
+
+    .panel {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 8px 24px #0f172a0d;
+    }
+
+    .connection, .send-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .connection { justify-content: space-between; }
+    .status { color: #a16207; font-size: .95rem; }
+    .status.connected { color: #15803d; }
+
+    .scan-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+    .scan-card h2 { margin: 0 0 6px; }
+    .scan-uid { margin: 0; color: #1d4ed8; font: 700 clamp(1.5rem, 5vw, 2rem)/1.2 Consolas, "Courier New", monospace; }
+    .scan-result { margin: 0; color: #a16207; }
+    .scan-result.allowed { color: #15803d; }
+    .scan-result.denied { color: #b91c1c; }
+
+    button, input {
+      min-height: 42px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font: inherit;
+    }
+
+    button {
+      padding: 9px 14px;
+      color: #1e293b;
+      background: #f1f5f9;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { background: #e2e8f0; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.primary { border-color: #3b82f6; color: #ffffff; background: #2563eb; }
+    button.primary:hover:not(:disabled) { background: #1d4ed8; }
+    button.danger { border-color: #fecaca; }
+
+    input {
+      min-width: 180px;
+      flex: 1;
+      padding: 9px 12px;
+      color: #1e293b;
+      background: #ffffff;
+      outline: none;
+    }
+
+    input:focus { border-color: #60a5fa; }
+    h2 { margin: 0 0 14px; font-size: 1.05rem; }
+    .commands { display: flex; flex-wrap: wrap; gap: 8px; }
+    .hint { margin: 12px 0 0; color: #64748b; font-size: .9rem; line-height: 1.5; }
+
+    #console {
+      height: 330px;
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      background: #f8fafc;
+      color: #334155;
+      font: .9rem/1.55 Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .console-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
+    @media (max-width: 520px) {
+      body { padding: 22px 12px; }
+      .panel { padding: 16px; }
+      .connection > * { width: 100%; }
+      #console { height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>STM32 UART Console</h1>
+    <p class="subtitle">Giao tiếp với mạch RFID qua bộ chuyển USB-to-TTL.</p>
+
+    <section class="panel connection" aria-label="Kết nối UART">
+      <span id="status" class="status">Chưa kết nối</span>
+      <button id="connectButton" class="primary" type="button">Kết nối cổng COM</button>
+      <button id="disconnectButton" type="button" disabled>Ngắt kết nối</button>
+    </section>
+
+    <section class="panel scan-card" aria-live="polite" aria-atomic="true">
+      <div>
+        <h2>Thẻ vừa quét</h2>
+        <p id="latestUid" class="scan-uid">Chưa có thẻ</p>
+      </div>
+      <p id="scanResult" class="scan-result">Kết nối và quét thẻ để xem UID.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Lệnh nhanh</h2>
+      <div class="commands">
+        <button type="button" data-command="HELP">HELP</button>
+        <button type="button" data-command="LIST">LIST</button>
+        <button type="button" data-command="STATUS">STATUS</button>
+        <button type="button" data-command="ENROLL">ENROLL</button>
+        <button type="button" data-command="OPEN">OPEN</button>
+        <button type="button" data-command="LOCK">LOCK</button>
+        <button type="button" data-command="UNLOCK">UNLOCK</button>
+        <button type="button" data-command="LOG">LOG</button>
+      </div>
+      <p class="hint">Lệnh thêm/xóa thẻ: nhập <code>ADD XX:XX:XX:XX</code> hoặc <code>DEL XX:XX:XX:XX</code>.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Gửi lệnh</h2>
+      <form id="commandForm" class="send-row">
+        <input id="commandInput" type="text" maxlength="39" autocomplete="off"
+               placeholder="Ví dụ: STATUS" aria-label="Lệnh UART" disabled>
+        <button id="sendButton" class="primary" type="submit" disabled>Gửi</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Nhật ký truyền nhận</h2>
+      <div class="console-actions">
+        <button id="clearButton" type="button">Xóa nhật ký</button>
+      </div>
+      <div id="console" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const statusElement = document.querySelector("#status");
+    const connectButton = document.querySelector("#connectButton");
+    const disconnectButton = document.querySelector("#disconnectButton");
+    const commandInput = document.querySelector("#commandInput");
+    const sendButton = document.querySelector("#sendButton");
+    const commandForm = document.querySelector("#commandForm");
+    const consoleElement = document.querySelector("#console");
+    const latestUidElement = document.querySelector("#latestUid");
+    const scanResultElement = document.querySelector("#scanResult");
+
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let readTask = null;
+    let disconnecting = false;
+    let receiveBuffer = "";
+    let pendingScanUid = null;
+
+    function setConnected(connected) {
+      statusElement.textContent = connected ? "Đã kết nối • 9600 baud, 8N1" : "Chưa kết nối";
+      statusElement.classList.toggle("connected", connected);
+      connectButton.disabled = connected;
+      disconnectButton.disabled = !connected;
+      commandInput.disabled = !connected;
+      sendButton.disabled = !connected;
+      document.querySelectorAll("[data-command]").forEach(button => {
+        button.disabled = !connected;
+      });
+    }
+
+    function logLine(direction, message) {
+      const time = new Date().toLocaleTimeString();
+      consoleElement.textContent += `[${time}] ${direction} ${message}\n`;
+      const lines = consoleElement.textContent.split("\n");
+      if (lines.length > 502) {
+        consoleElement.textContent = lines.slice(-501).join("\n");
+      }
+      consoleElement.scrollTop = consoleElement.scrollHeight;
+    }
+
+    function handleReceivedLine(line) {
+      if (line.length === 0) return;
+
+      const scan = line.match(/^SCAN,([0-9A-F]{2}(?::[0-9A-F]{2}){3})$/i);
+      if (scan) {
+        pendingScanUid = scan[1].toUpperCase();
+        latestUidElement.textContent = pendingScanUid;
+        scanResultElement.textContent = "Đang kiểm tra thẻ...";
+        scanResultElement.className = "scan-result";
+      }
+
+      const result = line.match(/^LOG,\d+,([0-9A-F]{2}(?::[0-9A-F]{2}){3}),(ALLOW|DENY)$/i);
+      if (result && pendingScanUid === result[1].toUpperCase()) {
+        const allowed = result[2].toUpperCase() === "ALLOW";
+        scanResultElement.textContent = allowed ? "Được phép truy cập" : "Từ chối truy cập";
+        scanResultElement.className = `scan-result ${allowed ? "allowed" : "denied"}`;
+        pendingScanUid = null;
+      }
+
+      logLine("←", line);
+    }
+
+    async function readFromPort(currentPort) {
+      const decoder = new TextDecoder();
+      try {
+        while (currentPort.readable && !disconnecting) {
+          reader = currentPort.readable.getReader();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              receiveBuffer += decoder.decode(value, { stream: true });
+              const lines = receiveBuffer.split(/\r\n|\n|\r/);
+              receiveBuffer = lines.pop();
+              lines.forEach(handleReceivedLine);
+            }
+          } finally {
+            reader.releaseLock();
+            reader = null;
+          }
+        }
+      } catch (error) {
+        if (!disconnecting) {
+          logLine("LỖI", `Không thể đọc cổng nối tiếp: ${error.message}`);
+        }
+      } finally {
+        if (receiveBuffer.length > 0) {
+          handleReceivedLine(receiveBuffer);
+          receiveBuffer = "";
+        }
+        if (!disconnecting) void disconnect();
+      }
+    }
+
+    async function connect() {
+      if (!("serial" in navigator)) {
+        logLine("LỖI", "Trình duyệt không hỗ trợ Web Serial. Hãy dùng Chrome/Edge trên HTTPS hoặc localhost.");
+        return;
+      }
+
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: "none" });
+        disconnecting = false;
+        writer = port.writable.getWriter();
+        setConnected(true);
+        logLine("INFO", "Đã mở cổng. Nhập HELP để xem lệnh.");
+        readTask = readFromPort(port);
+      } catch (error) {
+        logLine("LỖI", `Không kết nối được: ${error.message}`);
+        if (port) {
+          try { await port.close(); } catch (closeError) {
+            logLine("LỖI", `Không thể đóng cổng: ${closeError.message}`);
+          }
+          port = null;
+        }
+      }
+    }
+
+    async function disconnect() {
+      if (!port) return;
+      disconnecting = true;
+      try {
+        if (reader) await reader.cancel();
+        if (writer) {
+          writer.releaseLock();
+          writer = null;
+        }
+        if (readTask) {
+          const task = readTask;
+          readTask = null;
+          await task;
+        }
+        if (port.readable && port.readable.locked) {
+          logLine("LỖI", "Không thể đóng cổng vì luồng đọc vẫn đang được sử dụng.");
+          return;
+        }
+        await port.close();
+        port = null;
+        receiveBuffer = "";
+        setConnected(false);
+        logLine("INFO", "Đã ngắt kết nối.");
+      } catch (error) {
+        logLine("LỖI", `Không thể ngắt kết nối: ${error.message}`);
+      } finally {
+        disconnecting = false;
+      }
+    }
+
+    async function sendCommand(command) {
+      const trimmed = command.trim();
+      if (!trimmed || !writer) return;
+      if (trimmed.length > 39) {
+        logLine("LỖI", "Lệnh dài tối đa 39 ký tự theo giới hạn firmware.");
+        return;
+      }
+      try {
+        await writer.write(new TextEncoder().encode(`${trimmed}\r\n`));
+        logLine("→", trimmed);
+      } catch (error) {
+        logLine("LỖI", `Không gửi được lệnh: ${error.message}`);
+      }
+    }
+
+    connectButton.addEventListener("click", connect);
+    disconnectButton.addEventListener("click", disconnect);
+    document.querySelectorAll("[data-command]").forEach(button => {
+      button.addEventListener("click", () => sendCommand(button.dataset.command));
+    });
+    commandForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      await sendCommand(commandInput.value);
+      commandInput.value = "";
+      commandInput.focus();
+    });
+    document.querySelector("#clearButton").addEventListener("click", () => {
+      consoleElement.textContent = "";
+    });
+  </script>
+</body>
+</html>

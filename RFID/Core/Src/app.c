@@ -778,6 +778,8 @@ void App_HandleCard(const AppCardEvent *event)
         return;
     }
 
+    UART_WriteUidLine("SCAN,", event->uid, "\r\n");
+
     uint8_t enrollmentResult = EnrollCard(event->uid);
     uint8_t cardIsAuthorized = IsAuthorizedCard(event->uid);
     uint8_t locked = systemLocked;
