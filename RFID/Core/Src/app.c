@@ -730,31 +730,46 @@ void App_Init(void)
     // 5. Khởi tạo module đọc thẻ RFID RC522 và kiểm tra phiên bản
     MFRC522_Init();
     uchar rc522_ver = MFRC522_ReadVersion();
+    uint8_t rc522_ok = (rc522_ver != 0x00 && rc522_ver != 0xFF);
+
     char verMsg[48];
     (void)snprintf(verMsg, sizeof(verMsg), "RC522 Ver: 0x%02X%s\r\n", rc522_ver,
-                   (rc522_ver == 0x92 || rc522_ver == 0x91 || rc522_ver == 0x12) ? " (OK)" : " (ERR: Kiem tra day noi!)");
+                   rc522_ok ? " (OK)" : " (ERR: Kiem tra day noi!)");
     UART_Write(verMsg);
+
+    // Hiển thị trực tiếp thông tin kiểm tra RC522 lên LCD dòng 2
+    I2C_LCD_SetCursor(MyI2C_LCD, 0, 1);
+    char lcdVer[17];
+    (void)snprintf(lcdVer, sizeof(lcdVer), "RC522:0x%02X %s", rc522_ver, rc522_ok ? "OK " : "ERR");
+    I2C_LCD_WriteString(MyI2C_LCD, lcdVer);
+    HAL_Delay(1500);
 
     UART_Write("RFID System Ready!\r\n");
     UART_Write("Gui HELP de xem danh sach lenh UART\r\n");
 
     // 6. Hiển thị màn hình chờ sẵn sàng quẹt thẻ
-    HAL_Delay(400);
     ShowIdleScreen();
 }
 
 uint8_t App_RFIDPoll(AppCardEvent *event)
 {
     uchar status;
-    uchar tagType[2];
+    uchar tagType[4] = {0};
     uchar serialNumber[5] = {0};
 
+    // Thử gửi lệnh REQA (0x26), nếu thẻ đang ở chế độ Halt thì thử tiếp WUPA (0x52)
     status = MFRC522_Request(PICC_REQIDL, tagType);
+    if (status != MI_OK)
+    {
+        status = MFRC522_Request(PICC_REQALL, tagType);
+    }
+
     if (status != MI_OK)
     {
         return 0;
     }
 
+    // Chống va chạm và đọc UID 4-byte của thẻ Mifare
     status = MFRC522_Anticoll(serialNumber);
     if (status != MI_OK)
     {

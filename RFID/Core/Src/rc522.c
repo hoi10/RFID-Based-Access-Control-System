@@ -1,5 +1,13 @@
 #include "rc522.h"
 
+static void RC522_Delay_us(uint32_t us)
+{
+    for (volatile uint32_t i = 0; i < us * 12; i++)
+    {
+        __NOP();
+    }
+}
+
 static uchar RC522_SPI_Transfer(uchar data)
 {
     uchar received = 0;
@@ -8,17 +16,14 @@ static uchar RC522_SPI_Transfer(uchar data)
     {
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, (data & mask) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        for (volatile uint8_t settle = 0; settle < 8; settle++)
-        {
-            __NOP();
-        }
+        RC522_Delay_us(2);
+
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
-        for (volatile uint8_t settle = 0; settle < 8; settle++)
-        {
-            __NOP();
-        }
+        RC522_Delay_us(2);
+
         received = (received << 1) | (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
+        RC522_Delay_us(1);
     }
 
     return received;
@@ -33,12 +38,16 @@ static uchar RC522_SPI_Transfer(uchar data)
 void Write_MFRC522(uchar addr, uchar val)
 {
 	/* CS LOW */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+	RC522_Delay_us(5);
+
     RC522_SPI_Transfer((addr << 1) & 0x7E);
     RC522_SPI_Transfer(val);
 
 	/* CS HIGH */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
+	RC522_Delay_us(5);
+	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
+	RC522_Delay_us(5);
 }
 
 /*
@@ -52,26 +61,34 @@ uchar Read_MFRC522(uchar addr)
     uchar val;
 
 	/* CS LOW */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+	RC522_Delay_us(5);
+
     RC522_SPI_Transfer(((addr << 1) & 0x7E) | 0x80);
     val = RC522_SPI_Transfer(0x00);
 
 	/* CS HIGH */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT,MFRC522_CS_PIN,GPIO_PIN_SET);
+	RC522_Delay_us(5);
+	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
+	RC522_Delay_us(5);
 
     return val;
-
 }
 
 static void Read_MFRC522_FIFO(uchar *buffer, uchar length)
 {
     HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+    RC522_Delay_us(5);
+
     RC522_SPI_Transfer(((FIFODataReg << 1) & 0x7E) | 0x80);
     for (uchar i = 0; i < length; i++)
     {
         buffer[i] = RC522_SPI_Transfer(0x00);
     }
+
+    RC522_Delay_us(5);
     HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
+    RC522_Delay_us(5);
 }
 
 /*
@@ -108,9 +125,9 @@ void ClearBitMask(uchar reg, uchar mask)
  */
 void AntennaOn(void)
 {
-
-	Read_MFRC522(TxControlReg);
-	SetBitMask(TxControlReg, 0x03);
+    // Bit 7 (InvTx2RFOn) = 1: TX2 đảo pha 180 độ so với TX1 (bắt buộc để phát điện áp vi sai trên anten)
+    // Bit 1 (Tx2RFEn) = 1, Bit 0 (Tx1RFEn) = 1: Bật cả 2 transistor công suất TX1 và TX2
+    Write_MFRC522(TxControlReg, 0x83);
 }
 
 /*
@@ -151,10 +168,10 @@ void MFRC522_Init(void)
     GPIO_InitTypeDef gpioInit = {0};
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_SPI2_CLK_ENABLE();
-    SPI2->CR1 &= ~SPI_CR1_SPE;
+    __HAL_RCC_SPI2_CLK_DISABLE(); // Tắt ngoại vi SPI2 để giải phóng hoàn toàn PB12..PB15 về GPIO
 
-    gpioInit.Pin = GPIO_PIN_13 | GPIO_PIN_15;
+    // Cấu hình đồng bộ PB0 (RST), PB12 (CS), PB13 (SCK), PB15 (MOSI) với High Speed
+    gpioInit.Pin = GPIO_PIN_0 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15;
     gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
     gpioInit.Pull = GPIO_NOPULL;
     gpioInit.Speed = GPIO_SPEED_FREQ_HIGH;
@@ -170,25 +187,30 @@ void MFRC522_Init(void)
 
     // Hard reset RC522: kéo RST xuống LOW rồi lên HIGH
     HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_RESET);
-    HAL_Delay(10);
+    HAL_Delay(20);
     HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_SET);
     HAL_Delay(50);
 
     // Soft reset
     MFRC522_Reset();
-    HAL_Delay(10);
+    HAL_Delay(20);
 
-    // Cấu hình Timer: TPrescaler*TreloadVal/6.78MHz = ~25ms
-    Write_MFRC522(TModeReg, 0x8D);      // Tauto=1
-    Write_MFRC522(TPrescalerReg, 0x3E);
-    Write_MFRC522(TReloadRegL, 30);
-    Write_MFRC522(TReloadRegH, 0);
+    // Cấu hình Timer RC522 theo thông số chuẩn NXP/Arduino:
+    // f_timer = 40kHz (chu kỳ 25us), Timeout = 1000 * 25us = 25ms
+    Write_MFRC522(TModeReg, 0x80);          // Tauto=1
+    Write_MFRC522(TPrescalerReg, 0xA9);     // TPrescaler = 0x0A9 (169)
+    Write_MFRC522(TReloadRegH, 0x03);       // Reload = 0x03E8 (1000)
+    Write_MFRC522(TReloadRegL, 0xE8);
 
-    Write_MFRC522(TxAutoReg, 0x40);     // 100% ASK modulation
-    Write_MFRC522(ModeReg, 0x3D);       // CRC initial 0x6363
+    Write_MFRC522(TxModeReg, 0x00);
+    Write_MFRC522(RxModeReg, 0x00);
+    Write_MFRC522(ModWidthReg, 0x26);
 
-    // Cấu hình độ nhạy Anten tối đa (RxGain = 48dB) giúp nhận thẻ xa và nhạy hơn
-    SetBitMask(RFCfgReg, 0x70);
+    Write_MFRC522(TxAutoReg, 0x40);         // 100% ASK modulation
+    Write_MFRC522(ModeReg, 0x3D);           // CRC initial 0x6363
+
+    // Cấu hình độ nhạy Anten tối ưu (RxGain = 43dB - 0x68) rất nhạy cho chip clone 0x82 mà không bị bão hòa
+    Write_MFRC522(RFCfgReg, 0x68);
 
     // Bật anten phát trường RF
     AntennaOn();
@@ -232,7 +254,7 @@ uchar MFRC522_ToCard(uchar command, uchar *sendData, uchar sendLen, uchar *backD
     }
 
     Write_MFRC522(CommIEnReg, irqEn|0x80);	// Interrupt request
-    ClearBitMask(CommIrqReg, 0x80);			// Clear all interrupt request bit
+    Write_MFRC522(CommIrqReg, 0x7F);			// Clear all interrupt request bit (chuẩn datasheet NXP)
     SetBitMask(FIFOLevelReg, 0x80);			// FlushBuffer=1, FIFO Initialization
 
 	Write_MFRC522(CommandReg, PCD_IDLE);	// NO action; Cancel the current command
@@ -263,50 +285,44 @@ uchar MFRC522_ToCard(uchar command, uchar *sendData, uchar sendLen, uchar *backD
 
     ClearBitMask(BitFramingReg, 0x80);			//StartSend=0
 
-    if (i != 0)
+    // Nếu timeout không nhận được phản hồi từ thẻ
+    if ((i == 0) || (!(n & waitIRq) && (n & 0x01)))
     {
-        if(!(Read_MFRC522(ErrorReg) & 0x1B))	//BufferOvfl Collerr CRCErr ProtecolErr
+        return MI_NOTAGERR;
+    }
+
+    // Bỏ qua bit CollErr (0x08) và CRCErr (0x04) trong khung REQA; chỉ bắt BufferOvfl/ParityErr/ProtocolErr
+    if (Read_MFRC522(ErrorReg) & 0x13)
+    {
+        return MI_ERR;
+    }
+
+    status = MI_OK;
+
+    if (command == PCD_TRANSCEIVE)
+    {
+        n = Read_MFRC522(FIFOLevelReg);
+        lastBits = Read_MFRC522(ControlReg) & 0x07;
+        if (lastBits)
         {
-            status = MI_OK;
-            if (n & irqEn & 0x01)
-            {
-				status = MI_NOTAGERR;
-			}
-
-            if (command == PCD_TRANSCEIVE)
-            {
-               	n = Read_MFRC522(FIFOLevelReg);
-              	lastBits = Read_MFRC522(ControlReg) & 0x07;
-                if (lastBits)
-                {
-					*backLen = (n-1)*8 + lastBits;
-				}
-                else
-                {
-					*backLen = n*8;
-				}
-
-                if (n == 0)
-                {
-					n = 1;
-				}
-                if (n > MAX_LEN)
-                {
-					n = MAX_LEN;
-				}
-
-                Read_MFRC522_FIFO(backData, n);
-            }
+            *backLen = (n-1)*8 + lastBits;
         }
         else
         {
-			status = MI_ERR;
-		}
+            *backLen = n*8;
+        }
 
+        if (n == 0)
+        {
+            n = 1;
+        }
+        if (n > MAX_LEN)
+        {
+            n = MAX_LEN;
+        }
+
+        Read_MFRC522_FIFO(backData, n);
     }
-
-    //SetBitMask(ControlReg,0x80);           //timer stops
-    //Write_MFRC522(CommandReg, PCD_IDLE);
 
     return status;
 }
@@ -326,14 +342,15 @@ uchar MFRC522_ToCard(uchar command, uchar *sendData, uchar sendLen, uchar *backD
 uchar MFRC522_Request(uchar reqMode, uchar *TagType)
 {
 	uchar status;
-	uint backBits;			 // The received data bits
+	uint backBits = 0;			 // The received data bits
 
 	Write_MFRC522(BitFramingReg, 0x07);		//TxLastBists = BitFramingReg[2..0]
+	ClearBitMask(CollReg, 0x80);
 
 	TagType[0] = reqMode;
 	status = MFRC522_ToCard(PCD_TRANSCEIVE, TagType, 1, TagType, &backBits);
 
-	if ((status != MI_OK) || (backBits != 0x10))
+	if ((status != MI_OK) || (backBits == 0))
 	{
 		status = MI_ERR;
 	}
