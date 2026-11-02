@@ -227,6 +227,16 @@
       border-color: var(--accent-hover);
     }
 
+    button.success {
+      color: var(--ok-fg);
+      border-color: var(--ok-border);
+      background: #f0fdf4;
+    }
+
+    button.success:hover:not(:disabled) {
+      background: var(--ok-bg);
+    }
+
     button.danger {
       color: var(--err-fg);
       border-color: var(--err-border);
@@ -269,12 +279,13 @@
       margin: 0 auto;
       padding: 16px 20px 24px;
       display: grid;
-      grid-template-columns: 440px minmax(0, 1fr);
+      grid-template-columns: 480px minmax(0, 1fr);
       gap: 16px;
       align-items: start;
     }
 
-    .col-left {
+    .col-left,
+    .col-right {
       display: flex;
       flex-direction: column;
       gap: 14px;
@@ -455,11 +466,143 @@
       color: var(--text-muted);
     }
 
-    /* Card UID Manager (ADD / DEL / LIST) */
+    /* Peripheral I/O Control Rows with Phone-Setting Style Toggle Switch */
+    .io-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .io-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 10px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+    }
+
+    .io-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .io-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #cbd5e1;
+      border: 1px solid #94a3b8;
+      flex-shrink: 0;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .io-dot.green-on {
+      background: #16a34a;
+      border-color: #15803d;
+    }
+
+    .io-dot.red-on {
+      background: #dc2626;
+      border-color: #b91c1c;
+    }
+
+    .io-dot.buzzer-on {
+      background: #d97706;
+      border-color: #b45309;
+    }
+
+    .io-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .io-pin {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .io-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .io-state-text {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 26px;
+      text-align: right;
+    }
+
+    .io-state-text.active {
+      color: var(--text-primary);
+    }
+
+    /* Toggle Switch (Settings Style) */
+    .switch-btn {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid #94a3b8;
+      background: #cbd5e1;
+      cursor: pointer;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .switch-btn:hover:not(:disabled) {
+      background: #94a3b8;
+      border-color: #64748b;
+    }
+
+    .switch-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+    }
+
+    .switch-btn[aria-checked="true"] .switch-thumb {
+      transform: translateX(20px);
+    }
+
+    .switch-btn.switch-green[aria-checked="true"] {
+      background: #16a34a;
+      border-color: #15803d;
+    }
+
+    .switch-btn.switch-red[aria-checked="true"] {
+      background: #dc2626;
+      border-color: #b91c1c;
+    }
+
+    .switch-btn.switch-buzzer[aria-checked="true"] {
+      background: #d97706;
+      border-color: #b45309;
+    }
+
+    /* Data Tables (Authorized Cards & Scan History) */
     .uid-form {
       display: flex;
       gap: 6px;
       align-items: center;
+      margin-bottom: 6px;
     }
 
     .uid-input {
@@ -470,7 +613,7 @@
     }
 
     .uid-feedback {
-      margin: 6px 0 0;
+      margin: 0 0 10px;
       font-size: 12px;
       color: var(--text-muted);
     }
@@ -479,54 +622,99 @@
       color: var(--err-fg);
     }
 
-    .card-list-box {
-      margin-top: 10px;
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 10px;
-    }
-
-    .card-list-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-    }
-
-    .card-items {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-
-    .card-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 8px;
-      background: var(--bg-subtle);
+    .table-wrap {
       border: 1px solid var(--border-subtle);
       border-radius: 4px;
-      font-family: var(--font-mono);
-      font-size: 12px;
+      overflow: hidden;
+      max-height: 240px;
+      overflow-y: auto;
+      background: var(--bg-surface);
     }
 
-    .card-empty {
-      font-size: 12px;
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      text-align: left;
+    }
+
+    .data-table th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 1;
+    }
+
+    .data-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: middle;
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--bg-subtle);
+    }
+
+    .col-mono {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .col-right-align {
+      text-align: right;
+    }
+
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .tag-pill.allow {
+      background: var(--ok-bg);
+      color: var(--ok-fg);
+      border: 1px solid var(--ok-border);
+    }
+
+    .tag-pill.deny {
+      background: var(--err-bg);
+      color: var(--err-fg);
+      border: 1px solid var(--err-border);
+    }
+
+    .tag-pill.neutral {
+      background: #e2e8f0;
+      color: var(--text-secondary);
+    }
+
+    .table-empty {
+      padding: 14px 10px;
+      text-align: center;
       color: var(--text-muted);
+      font-size: 12px;
       font-style: italic;
-      padding: 4px 0;
     }
 
     /* Right Column: Terminal & Raw Command */
     .terminal-panel {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 88px);
-      min-height: 520px;
+      height: 460px;
       background: var(--bg-terminal);
       border: 1px solid #334155;
       border-radius: 6px;
@@ -718,12 +906,12 @@
       color: #cbd5e1;
     }
 
-    @media (max-width: 980px) {
+    @media (max-width: 1020px) {
       .workspace {
         grid-template-columns: 1fr;
       }
       .terminal-panel {
-        height: 500px;
+        height: 420px;
       }
     }
 
@@ -772,7 +960,7 @@
   </div>
 
   <main class="workspace">
-    <!-- Cột trái: Giám sát thẻ, Trạng thái thiết bị & Điều khiển -->
+    <!-- Cột trái: Giám sát thẻ, Trạng thái, Bảng lệnh & Danh sách thẻ hợp lệ -->
     <div class="col-left">
       <!-- Thẻ vừa quét -->
       <section class="panel" aria-live="polite" aria-atomic="true">
@@ -789,14 +977,14 @@
             <span>Thao tác nhanh với UID vừa quét:</span>
             <div class="scan-actions">
               <button id="useScannedUidBtn" class="btn-sm" type="button" disabled>Điền vào ô UID</button>
-              <button id="addScannedUidBtn" class="btn-sm" type="button" disabled>Gửi ADD</button>
-              <button id="delScannedUidBtn" class="btn-sm" type="button" disabled>Gửi DEL</button>
+              <button id="addScannedUidBtn" class="btn-sm success" type="button" disabled>+ Thêm thẻ</button>
+              <button id="delScannedUidBtn" class="btn-sm danger" type="button" disabled>Xóa thẻ</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Trạng thái thiết bị (Đồng bộ từ phản hồi STATUS / sự kiện) -->
+      <!-- Trạng thái thiết bị -->
       <section class="panel">
         <div class="panel-header">
           <h2 class="panel-title">Trạng thái thiết bị</h2>
@@ -814,7 +1002,7 @@
             </div>
             <div class="metric-cell">
               <div class="metric-label">Thẻ hợp lệ</div>
-              <div id="statCards" class="metric-val">—</div>
+              <div id="statCards" class="metric-val">2 / 5</div>
             </div>
             <div class="metric-cell">
               <div class="metric-label">Bản ghi Log</div>
@@ -832,10 +1020,10 @@
         </div>
       </section>
 
-      <!-- Lệnh điều khiển nhanh -->
+      <!-- Lệnh điều khiển nhanh & Công tắc LED / Còi -->
       <section class="panel">
         <div class="panel-header">
-          <h2 class="panel-title">Bảng lệnh nhanh</h2>
+          <h2 class="panel-title">Bảng điều khiển &amp; Lệnh nhanh</h2>
           <span style="font-size: 11px; color: var(--text-muted);">Theo giao thức firmware</span>
         </div>
         <div class="panel-body">
@@ -873,78 +1061,167 @@
               <span>HELP</span><span class="cmd-desc">Trợ giúp</span>
             </button>
           </div>
+
+          <p class="cmd-group-label">Công tắc Đèn LED &amp; Còi (Bấm để Bật / Tắt)</p>
+          <div class="io-list">
+            <!-- Công tắc LED Xanh -->
+            <div class="io-row">
+              <div class="io-info">
+                <span id="dotLedGreen" class="io-dot" aria-hidden="true"></span>
+                <span class="io-name">Đèn LED Xanh</span>
+                <span class="io-pin">(PA4)</span>
+              </div>
+              <div class="io-actions">
+                <span id="stateLedGreen" class="io-state-text">TẮT</span>
+                <button id="switchLedGreen" type="button" class="switch-btn switch-green"
+                        role="switch" aria-checked="false" aria-label="Công tắc bật tắt đèn LED Xanh" disabled>
+                  <span class="switch-thumb"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Công tắc LED Đỏ -->
+            <div class="io-row">
+              <div class="io-info">
+                <span id="dotLedRed" class="io-dot" aria-hidden="true"></span>
+                <span class="io-name">Đèn LED Đỏ</span>
+                <span class="io-pin">(PA5)</span>
+              </div>
+              <div class="io-actions">
+                <span id="stateLedRed" class="io-state-text">TẮT</span>
+                <button id="switchLedRed" type="button" class="switch-btn switch-red"
+                        role="switch" aria-checked="false" aria-label="Công tắc bật tắt đèn LED Đỏ" disabled>
+                  <span class="switch-thumb"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Công tắc Còi Buzzer -->
+            <div class="io-row">
+              <div class="io-info">
+                <span id="dotBuzzer" class="io-dot" aria-hidden="true"></span>
+                <span class="io-name">Còi Buzzer</span>
+                <span class="io-pin">(PB10)</span>
+              </div>
+              <div class="io-actions">
+                <button type="button" class="btn-sm" data-command="BEEP" disabled title="Kêu bíp ngắn 200ms">Bíp thử</button>
+                <span id="stateBuzzer" class="io-state-text">TẮT</span>
+                <button id="switchBuzzer" type="button" class="switch-btn switch-buzzer"
+                        role="switch" aria-checked="false" aria-label="Công tắc bật tắt Còi Buzzer" disabled>
+                  <span class="switch-thumb"></span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <!-- Quản lý UID thẻ (ADD / DEL) -->
+      <!-- Bảng Danh sách thẻ hợp lệ (Ngay bên dưới Bảng điều khiển) -->
       <section class="panel">
         <div class="panel-header">
-          <h2 class="panel-title">Thêm / Xóa thẻ theo UID</h2>
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">XX:XX:XX:XX</span>
+          <h2 class="panel-title">Danh sách thẻ hợp lệ (<span id="cardListCount">2/5</span>)</h2>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-sm" data-command="ENROLL" disabled title="Bật chế độ quét thẻ trên mạch để thêm">+ Quét thẻ mới</button>
+            <button type="button" class="btn-sm" data-command="LIST" disabled title="Đồng bộ lại danh sách thẻ từ STM32">Đồng bộ (LIST)</button>
+          </div>
         </div>
         <div class="panel-body">
           <div class="uid-form">
             <input id="uidInput" class="uid-input" type="text" maxlength="11" autocomplete="off"
-                   placeholder="VD: 62:99:18:02" aria-label="UID thẻ định dạng XX:XX:XX:XX" disabled>
-            <button id="addUidButton" class="primary" type="button" disabled>ADD</button>
-            <button id="delUidButton" type="button" disabled>DEL</button>
+                   placeholder="Nhập UID mới (VD: A1:B2:C3:D4)" aria-label="UID thẻ định dạng XX:XX:XX:XX" disabled>
+            <button id="addUidButton" class="primary" type="button" disabled>+ Thêm thẻ</button>
           </div>
-          <p id="uidFeedback" class="uid-feedback">Nhập 4 byte hex cách nhau bởi dấu hai chấm (tự động chèn <code>:</code> khi gõ).</p>
+          <p id="uidFeedback" class="uid-feedback">Nhập 4 byte hex (tự động chèn dấu <code>:</code>) để thêm vào danh sách hợp lệ.</p>
 
-          <div class="card-list-box">
-            <div class="card-list-header">
-              <span>Danh sách thẻ từ lệnh <code>LIST</code>:</span>
-              <span id="cardListCount" style="font-family: var(--font-mono);">Chưa tải</span>
-            </div>
-            <div id="cardListContainer" class="card-items">
-              <div class="card-empty">Bấm nút LIST để đồng bộ danh sách thẻ từ STM32.</div>
-            </div>
+          <div class="table-wrap" aria-label="Bảng danh sách thẻ hợp lệ">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 44px;">#</th>
+                  <th>Mã UID thẻ</th>
+                  <th>Quyền</th>
+                  <th class="col-right-align">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="authorizedCardsTbody"></tbody>
+            </table>
           </div>
         </div>
       </section>
     </div>
 
-    <!-- Cột phải: Nhật ký truyền nhận & Gửi lệnh trực tiếp -->
-    <section class="terminal-panel" aria-label="Nhật ký truyền nhận UART">
-      <div class="terminal-toolbar">
-        <div class="terminal-toolbar-left">
-          <span class="terminal-title">UART MONITOR</span>
-          <select id="logFilter" class="filter-select" aria-label="Lọc nhật ký">
-            <option value="all">Tất cả dòng</option>
-            <option value="rx">Chỉ nhận (← RX)</option>
-            <option value="tx">Chỉ gửi (→ TX)</option>
-            <option value="alert">Lỗi &amp; Cảnh báo</option>
-          </select>
-          <span id="logCounter" style="font-family: var(--font-mono); font-size: 11px; color: #94a3b8;">0 dòng</span>
+    <!-- Cột phải: Nhật ký UART Terminal & Bảng Lịch sử quét thẻ -->
+    <div class="col-right">
+      <!-- UART Monitor & Gửi lệnh trực tiếp -->
+      <section class="terminal-panel" aria-label="Nhật ký truyền nhận UART">
+        <div class="terminal-toolbar">
+          <div class="terminal-toolbar-left">
+            <span class="terminal-title">UART MONITOR</span>
+            <select id="logFilter" class="filter-select" aria-label="Lọc nhật ký">
+              <option value="all">Tất cả dòng</option>
+              <option value="rx">Chỉ nhận (← RX)</option>
+              <option value="tx">Chỉ gửi (→ TX)</option>
+              <option value="alert">Lỗi &amp; Cảnh báo</option>
+            </select>
+            <span id="logCounter" style="font-family: var(--font-mono); font-size: 11px; color: #94a3b8;">0 dòng</span>
+          </div>
+
+          <div class="terminal-toolbar-right">
+            <label class="term-check">
+              <input id="autoScrollToggle" type="checkbox" checked>
+              <span>Tự cuộn</span>
+            </label>
+            <button id="copyLogButton" class="term-btn" type="button" title="Sao chép toàn bộ nhật ký">Sao chép</button>
+            <button id="downloadLogButton" class="term-btn" type="button" title="Tải nhật ký về máy (.log)">Tải xuống</button>
+            <button id="clearButton" class="term-btn" type="button" title="Xóa nhật ký trên màn hình">Xóa nhật ký</button>
+          </div>
         </div>
 
-        <div class="terminal-toolbar-right">
-          <label class="term-check">
-            <input id="autoScrollToggle" type="checkbox" checked>
-            <span>Tự cuộn</span>
-          </label>
-          <button id="copyLogButton" class="term-btn" type="button" title="Sao chép toàn bộ nhật ký">Sao chép</button>
-          <button id="downloadLogButton" class="term-btn" type="button" title="Tải nhật ký về máy (.log)">Tải xuống</button>
-          <button id="clearButton" class="term-btn" type="button" title="Xóa nhật ký trên màn hình">Xóa nhật ký</button>
-        </div>
-      </div>
+        <div id="console" role="log" aria-live="polite"></div>
 
-      <div id="console" role="log" aria-live="polite"></div>
-
-      <div class="terminal-footer">
-        <form id="commandForm" class="send-row">
-          <span class="cmd-prompt" aria-hidden="true">&gt;</span>
-          <input id="commandInput" type="text" maxlength="39" autocomplete="off"
-                 placeholder="Nhập lệnh UART (VD: STATUS, ADD 62:99:18:02)..." aria-label="Lệnh UART" disabled>
-          <span id="charCount" class="char-counter">0/39</span>
-          <button id="sendButton" class="primary" type="submit" disabled>Gửi lệnh</button>
-        </form>
-        <div class="terminal-hint">
-          <span>Giới hạn bộ đệm firmware: tối đa <code>39</code> ký tự + <code>\r\n</code>.</span>
-          <span>Phím tắt: <code>↑</code> / <code>↓</code> gọi lại lệnh cũ • <code>Enter</code> để gửi.</span>
+        <div class="terminal-footer">
+          <form id="commandForm" class="send-row">
+            <span class="cmd-prompt" aria-hidden="true">&gt;</span>
+            <input id="commandInput" type="text" maxlength="39" autocomplete="off"
+                   placeholder="Nhập lệnh UART (VD: STATUS, ADD 62:99:18:02)..." aria-label="Lệnh UART" disabled>
+            <span id="charCount" class="char-counter">0/39</span>
+            <button id="sendButton" class="primary" type="submit" disabled>Gửi lệnh</button>
+          </form>
+          <div class="terminal-hint">
+            <span>Giới hạn bộ đệm firmware: tối đa <code>39</code> ký tự + <code>\r\n</code>.</span>
+            <span>Phím tắt: <code>↑</code> / <code>↓</code> gọi lại lệnh cũ • <code>Enter</code> để gửi.</span>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <!-- Bảng Lịch sử quét thẻ (Cho phép Thêm thẻ lạ / Xóa thẻ đã lưu ngay trên dòng lịch sử) -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Lịch sử quét thẻ (<span id="scanHistoryCount">0</span> lượt)</h2>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" class="btn-sm" data-command="LOG" disabled title="Tải lịch sử lưu trong bộ nhớ STM32">Tải từ mạch (LOG)</button>
+            <button type="button" class="btn-sm danger" data-command="LOG CLEAR" disabled title="Xóa bộ nhớ log trên STM32">Xóa trên mạch</button>
+            <button id="clearScanHistoryBtn" type="button" class="btn-sm" title="Xóa bảng lịch sử lưu trên trình duyệt">Xóa bảng</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="table-wrap" style="max-height: 290px;" aria-label="Bảng lịch sử quét thẻ">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Mã UID đã quét</th>
+                  <th>Kết quả quét</th>
+                  <th>Trạng thái thẻ hiện tại</th>
+                  <th class="col-right-align">Thao tác nhanh</th>
+                </tr>
+              </thead>
+              <tbody id="scanHistoryTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script>
@@ -969,12 +1246,27 @@
     const statInvalid = document.querySelector("#statInvalid");
     const statHardware = document.querySelector("#statHardware");
 
+    const dotLedGreen = document.querySelector("#dotLedGreen");
+    const stateLedGreen = document.querySelector("#stateLedGreen");
+    const switchLedGreen = document.querySelector("#switchLedGreen");
+
+    const dotLedRed = document.querySelector("#dotLedRed");
+    const stateLedRed = document.querySelector("#stateLedRed");
+    const switchLedRed = document.querySelector("#switchLedRed");
+
+    const dotBuzzer = document.querySelector("#dotBuzzer");
+    const stateBuzzer = document.querySelector("#stateBuzzer");
+    const switchBuzzer = document.querySelector("#switchBuzzer");
+
     const uidInput = document.querySelector("#uidInput");
     const addUidButton = document.querySelector("#addUidButton");
-    const delUidButton = document.querySelector("#delUidButton");
     const uidFeedback = document.querySelector("#uidFeedback");
     const cardListCount = document.querySelector("#cardListCount");
-    const cardListContainer = document.querySelector("#cardListContainer");
+    const authorizedCardsTbody = document.querySelector("#authorizedCardsTbody");
+
+    const scanHistoryCount = document.querySelector("#scanHistoryCount");
+    const scanHistoryTbody = document.querySelector("#scanHistoryTbody");
+    const clearScanHistoryBtn = document.querySelector("#clearScanHistoryBtn");
 
     const consoleElement = document.querySelector("#console");
     const logFilter = document.querySelector("#logFilter");
@@ -990,8 +1282,11 @@
     const sendButton = document.querySelector("#sendButton");
 
     const MAX_LOG_LINES = 500;
+    const MAX_AUTHORIZED_CARDS = 5;
+    const MAX_SCAN_HISTORY = 100;
     const UID_REGEX = /^[0-9A-F]{2}(?::[0-9A-F]{2}){3}$/i;
     const STORAGE_KEY = "stm32_rfid_uart_prefs_v1";
+    const HISTORY_STORAGE_KEY = "stm32_rfid_scan_history_v1";
 
     let port = null;
     let reader = null;
@@ -1002,27 +1297,47 @@
     let receiveBuffer = "";
     let pendingScanUid = null;
     let lastScannedUid = null;
+    let lastPendingActionUid = null;
+
+    let ledGreenOn = false;
+    let ledRedOn = false;
+    let buzzerOn = false;
 
     let logEntries = [];
     let commandHistory = [];
     let historyIndex = -1;
-    let syncedCards = [];
-    let expectingCardList = false;
 
-    // Khôi phục thiết lập an toàn từ localStorage
+    // Khởi tạo sẵn 2 thẻ mặc định trong firmware (sẽ được cập nhật chính xác khi nhận LIST từ STM32)
+    let syncedCards = ["62:99:18:02", "11:22:33:44"];
+    let expectingCardList = false;
+    let scanHistory = [];
+
     function loadPreferences() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const prefs = JSON.parse(raw);
-        if (prefs.baudRate && baudSelect.querySelector(`option[value="${prefs.baudRate}"]`)) {
-          baudSelect.value = String(prefs.baudRate);
-        }
-        if (typeof prefs.autoScroll === "boolean") {
-          autoScrollToggle.checked = prefs.autoScroll;
+        if (raw) {
+          const prefs = JSON.parse(raw);
+          if (prefs.baudRate && baudSelect.querySelector(`option[value="${prefs.baudRate}"]`)) {
+            baudSelect.value = String(prefs.baudRate);
+          }
+          if (typeof prefs.autoScroll === "boolean") {
+            autoScrollToggle.checked = prefs.autoScroll;
+          }
         }
       } catch {
         // Bỏ qua nếu localStorage bị chặn
+      }
+
+      try {
+        const rawHist = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (rawHist) {
+          const parsed = JSON.parse(rawHist);
+          if (Array.isArray(parsed)) {
+            scanHistory = parsed.slice(0, MAX_SCAN_HISTORY);
+          }
+        }
+      } catch {
+        // Bỏ qua lỗi đọc lịch sử
       }
     }
 
@@ -1037,8 +1352,38 @@
       }
     }
 
+    function saveScanHistory() {
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(scanHistory));
+      } catch {
+        // Bỏ qua nếu localStorage bị chặn
+      }
+    }
+
     function isConnected() {
       return Boolean(port && writer && !disconnecting);
+    }
+
+    function setSwitchUiState(type, isOn) {
+      if (type === "green") {
+        ledGreenOn = isOn;
+        switchLedGreen.setAttribute("aria-checked", String(isOn));
+        dotLedGreen.classList.toggle("green-on", isOn);
+        stateLedGreen.textContent = isOn ? "BẬT" : "TẮT";
+        stateLedGreen.classList.toggle("active", isOn);
+      } else if (type === "red") {
+        ledRedOn = isOn;
+        switchLedRed.setAttribute("aria-checked", String(isOn));
+        dotLedRed.classList.toggle("red-on", isOn);
+        stateLedRed.textContent = isOn ? "BẬT" : "TẮT";
+        stateLedRed.classList.toggle("active", isOn);
+      } else if (type === "buzzer") {
+        buzzerOn = isOn;
+        switchBuzzer.setAttribute("aria-checked", String(isOn));
+        dotBuzzer.classList.toggle("buzzer-on", isOn);
+        stateBuzzer.textContent = isOn ? "BẬT" : "TẮT";
+        stateBuzzer.classList.toggle("active", isOn);
+      }
     }
 
     function updateControlsState() {
@@ -1051,7 +1396,10 @@
       sendButton.disabled = !connected;
       uidInput.disabled = !connected;
       addUidButton.disabled = !connected;
-      delUidButton.disabled = !connected;
+
+      switchLedGreen.disabled = !connected;
+      switchLedRed.disabled = !connected;
+      switchBuzzer.disabled = !connected;
 
       const hasScannedUid = Boolean(lastScannedUid);
       useScannedUidBtn.disabled = !connected || !hasScannedUid;
@@ -1061,7 +1409,7 @@
       document.querySelectorAll("[data-command]").forEach(button => {
         button.disabled = !connected;
       });
-      document.querySelectorAll("[data-del-uid]").forEach(button => {
+      document.querySelectorAll("[data-uid-action]").forEach(button => {
         button.disabled = !connected;
       });
     }
@@ -1191,39 +1539,153 @@
       }
     }
 
-    function renderCardList() {
-      cardListContainer.textContent = "";
-      cardListCount.textContent = `${syncedCards.length} thẻ`;
+    // Hiển thị bảng Danh sách thẻ hợp lệ
+    function renderAuthorizedCardsTable() {
+      authorizedCardsTbody.textContent = "";
+      cardListCount.textContent = `${syncedCards.length}/${MAX_AUTHORIZED_CARDS}`;
+      statCards.textContent = `${syncedCards.length} / ${MAX_AUTHORIZED_CARDS}`;
 
       if (syncedCards.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "card-empty";
-        empty.textContent = "Danh sách trống hoặc chưa có thẻ nào được lưu.";
-        cardListContainer.appendChild(empty);
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.className = "table-empty";
+        td.textContent = "Danh sách trống (0/5 thẻ). Hãy nhập UID ở trên hoặc bấm '+ Quét thẻ mới' để thêm.";
+        tr.appendChild(td);
+        authorizedCardsTbody.appendChild(tr);
         return;
       }
 
       const connected = isConnected();
-      syncedCards.forEach(uid => {
-        const item = document.createElement("div");
-        item.className = "card-item";
+      syncedCards.forEach((uid, index) => {
+        const tr = document.createElement("tr");
 
-        const uidSpan = document.createElement("span");
-        uidSpan.textContent = uid;
+        const tdIndex = document.createElement("td");
+        tdIndex.className = "col-mono";
+        tdIndex.textContent = String(index + 1);
 
+        const tdUid = document.createElement("td");
+        tdUid.className = "col-mono";
+        tdUid.textContent = uid;
+
+        const tdStatus = document.createElement("td");
+        const pill = document.createElement("span");
+        pill.className = "tag-pill allow";
+        pill.textContent = "Được phép mở";
+        tdStatus.appendChild(pill);
+
+        const tdAction = document.createElement("td");
+        tdAction.className = "col-right-align";
         const delBtn = document.createElement("button");
         delBtn.type = "button";
         delBtn.className = "btn-sm danger";
-        delBtn.dataset.delUid = uid;
+        delBtn.dataset.uidAction = "del";
         delBtn.disabled = !connected;
-        delBtn.textContent = "DEL";
+        delBtn.textContent = "Xóa thẻ";
         delBtn.addEventListener("click", () => {
+          lastPendingActionUid = uid;
           void sendCommand(`DEL ${uid}`);
         });
+        tdAction.appendChild(delBtn);
 
-        item.append(uidSpan, delBtn);
-        cardListContainer.appendChild(item);
+        tr.append(tdIndex, tdUid, tdStatus, tdAction);
+        authorizedCardsTbody.appendChild(tr);
       });
+    }
+
+    // Hiển thị bảng Lịch sử quét thẻ (có nút Thêm thẻ đối với thẻ lạ, Xóa thẻ đối với thẻ đã lưu)
+    function renderScanHistoryTable() {
+      scanHistoryTbody.textContent = "";
+      scanHistoryCount.textContent = String(scanHistory.length);
+
+      if (scanHistory.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.className = "table-empty";
+        td.textContent = "Chưa có lịch sử quét thẻ. Khi quẹt thẻ hoặc bấm 'Tải từ mạch (LOG)', dữ liệu sẽ hiện tại đây.";
+        tr.appendChild(td);
+        scanHistoryTbody.appendChild(tr);
+        return;
+      }
+
+      const connected = isConnected();
+      scanHistory.forEach(item => {
+        const tr = document.createElement("tr");
+        const isCurrentlySaved = syncedCards.includes(item.uid);
+
+        const tdTime = document.createElement("td");
+        tdTime.className = "col-mono";
+        tdTime.style.color = "var(--text-secondary)";
+        tdTime.textContent = item.timeText;
+
+        const tdUid = document.createElement("td");
+        tdUid.className = "col-mono";
+        tdUid.textContent = item.uid;
+
+        const tdResult = document.createElement("td");
+        const resPill = document.createElement("span");
+        resPill.className = `tag-pill ${item.allowed ? "allow" : "deny"}`;
+        resPill.textContent = item.allowed ? "ALLOW (Hợp lệ)" : "DENY (Từ chối)";
+        tdResult.appendChild(resPill);
+
+        const tdCurrent = document.createElement("td");
+        const curPill = document.createElement("span");
+        curPill.className = `tag-pill ${isCurrentlySaved ? "allow" : "neutral"}`;
+        curPill.textContent = isCurrentlySaved ? "Đã lưu trong DS" : "Thẻ lạ (Chưa lưu)";
+        tdCurrent.appendChild(curPill);
+
+        const tdAction = document.createElement("td");
+        tdAction.className = "col-right-align";
+
+        const actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.dataset.uidAction = isCurrentlySaved ? "del" : "add";
+        actionBtn.disabled = !connected;
+
+        if (isCurrentlySaved) {
+          actionBtn.className = "btn-sm danger";
+          actionBtn.textContent = "Xóa thẻ (DEL)";
+          actionBtn.addEventListener("click", () => {
+            lastPendingActionUid = item.uid;
+            void sendCommand(`DEL ${item.uid}`);
+          });
+        } else {
+          actionBtn.className = "btn-sm success";
+          actionBtn.textContent = "+ Thêm thẻ (ADD)";
+          actionBtn.addEventListener("click", () => {
+            lastPendingActionUid = item.uid;
+            void sendCommand(`ADD ${item.uid}`);
+          });
+        }
+
+        tdAction.appendChild(actionBtn);
+        tr.append(tdTime, tdUid, tdResult, tdCurrent, tdAction);
+        scanHistoryTbody.appendChild(tr);
+      });
+    }
+
+    function addOrUpdateScanHistoryEntry(uid, allowed, tickMs) {
+      const nowTime = new Date().toLocaleTimeString();
+      const timeText = tickMs ? `${nowTime} (${(Number(tickMs) / 1000).toFixed(1)}s)` : nowTime;
+
+      // Tránh trùng bản ghi cùng tick + uid khi bấm LOG nhiều lần
+      if (tickMs && scanHistory.some(h => h.tickMs === tickMs && h.uid === uid)) {
+        return;
+      }
+
+      scanHistory.unshift({
+        uid,
+        allowed,
+        tickMs: tickMs || null,
+        timeText
+      });
+
+      if (scanHistory.length > MAX_SCAN_HISTORY) {
+        scanHistory.pop();
+      }
+      saveScanHistory();
+      renderScanHistoryTable();
     }
 
     function updateTelemetryLock(locked) {
@@ -1253,23 +1715,26 @@
         updateControlsState();
       }
 
-      // 2. Bắt kết quả truy cập: LOG,<tick>,XX:XX:XX:XX,ALLOW|DENY
+      // 2. Bắt kết quả truy cập hoặc lịch sử: LOG,<tick>,XX:XX:XX:XX,ALLOW|DENY
       const logMatch = line.match(/^LOG,(\d+),([0-9A-F]{2}(?::[0-9A-F]{2}){3}),(ALLOW|DENY)$/i);
       if (logMatch) {
+        const tickMs = logMatch[1];
         const logUid = logMatch[2].toUpperCase();
         const allowed = logMatch[3].toUpperCase() === "ALLOW";
+
         if (pendingScanUid === logUid) {
           scanResultElement.textContent = allowed ? "Được phép truy cập (ALLOW)" : "Từ chối truy cập (DENY)";
           scanResultElement.className = `scan-result ${allowed ? "allowed" : "denied"}`;
           pendingScanUid = null;
         }
+        addOrUpdateScanHistoryEntry(logUid, allowed, tickMs);
       }
 
       // 3. Bắt phản hồi STATUS: STATUS,LOCKED|UNLOCKED,CARDS=x,LOGS=x,INVALID=x,ENROLL=READY|OFF
       const statusMatch = line.match(/^STATUS,(LOCKED|UNLOCKED),CARDS=(\d+),LOGS=(\d+),INVALID=(\d+),ENROLL=(READY|OFF)$/i);
       if (statusMatch) {
         updateTelemetryLock(statusMatch[1].toUpperCase() === "LOCKED");
-        statCards.textContent = statusMatch[2];
+        statCards.textContent = `${statusMatch[2]} / ${MAX_AUTHORIZED_CARDS}`;
         statLogs.textContent = statusMatch[3];
         statInvalid.textContent = statusMatch[4];
         updateTelemetryEnroll(statusMatch[5].toUpperCase() === "READY");
@@ -1281,8 +1746,8 @@
         const expected = Number(cardsHeaderMatch[1]);
         syncedCards = [];
         expectingCardList = expected > 0;
-        statCards.textContent = String(expected);
-        renderCardList();
+        renderAuthorizedCardsTable();
+        renderScanHistoryTable();
       } else {
         const cardItemMatch = line.match(/^CARD,([0-9A-F]{2}(?::[0-9A-F]{2}){3})$/i);
         if (cardItemMatch && expectingCardList) {
@@ -1290,7 +1755,8 @@
           if (!syncedCards.includes(cardUid)) {
             syncedCards.push(cardUid);
           }
-          renderCardList();
+          renderAuthorizedCardsTable();
+          renderScanHistoryTable();
         }
       }
 
@@ -1302,8 +1768,30 @@
         updateTelemetryLock(false);
       } else if (upper === "READY,SCAN CARD TO ENROLL") {
         updateTelemetryEnroll(true);
-      } else if (upper.startsWith("OK,ENROLLED,") || upper.startsWith("INFO,CARD ALREADY EXISTS,")) {
+      } else if (upper.startsWith("OK,ENROLLED,")) {
         updateTelemetryEnroll(false);
+        const enrolledUid = upper.replace("OK,ENROLLED,", "").trim();
+        if (UID_REGEX.test(enrolledUid) && !syncedCards.includes(enrolledUid)) {
+          syncedCards.push(enrolledUid);
+          renderAuthorizedCardsTable();
+          renderScanHistoryTable();
+        }
+      } else if (upper.startsWith("INFO,CARD ALREADY EXISTS,")) {
+        updateTelemetryEnroll(false);
+      } else if (upper === "OK,ADDED") {
+        if (lastPendingActionUid && !syncedCards.includes(lastPendingActionUid)) {
+          syncedCards.push(lastPendingActionUid);
+          renderAuthorizedCardsTable();
+          renderScanHistoryTable();
+        }
+        void sendCommand("LIST");
+      } else if (upper === "OK,DELETED") {
+        if (lastPendingActionUid) {
+          syncedCards = syncedCards.filter(u => u !== lastPendingActionUid);
+          renderAuthorizedCardsTable();
+          renderScanHistoryTable();
+        }
+        void sendCommand("LIST");
       } else if (upper === "OK,LOG CLEARED") {
         statLogs.textContent = "0";
       } else if (upper.startsWith("RC522 VER:")) {
@@ -1311,6 +1799,18 @@
       } else if (upper.startsWith("ALERT,")) {
         statHardware.textContent = line.replace(/^ALERT,/i, "");
         statHardware.className = "metric-val locked";
+      } else if (upper === "OK,LED GREEN ON") {
+        setSwitchUiState("green", true);
+      } else if (upper === "OK,LED GREEN OFF") {
+        setSwitchUiState("green", false);
+      } else if (upper === "OK,LED RED ON") {
+        setSwitchUiState("red", true);
+      } else if (upper === "OK,LED RED OFF") {
+        setSwitchUiState("red", false);
+      } else if (upper === "OK,BUZZER ON") {
+        setSwitchUiState("buzzer", true);
+      } else if (upper === "OK,BUZZER OFF") {
+        setSwitchUiState("buzzer", false);
       }
 
       logLine("←", line);
@@ -1398,10 +1898,21 @@
         writer = port.writable.getWriter();
         connecting = false;
         setConnectionStatus("connected");
-        logLine("INFO", `Đã mở cổng nối tiếp (${baudRate} baud, 8N1). Gửi HELP hoặc STATUS để kiểm tra.`);
+        logLine("INFO", `Đã mở cổng nối tiếp (${baudRate} baud, 8N1). Đang đồng bộ dữ liệu thiết bị...`);
 
         readTask = readFromPort(port);
         commandInput.focus();
+
+        // Tự động đồng bộ trạng thái, danh sách thẻ và lịch sử từ STM32 khi vừa kết nối
+        setTimeout(() => {
+          if (isConnected()) void sendCommand("STATUS");
+        }, 120);
+        setTimeout(() => {
+          if (isConnected()) void sendCommand("LIST");
+        }, 280);
+        setTimeout(() => {
+          if (isConnected()) void sendCommand("LOG");
+        }, 450);
       } catch (error) {
         connecting = false;
         if (error && error.name === "NotFoundError") {
@@ -1484,7 +1995,11 @@
       }
 
       try {
-        expectingCardList = trimmed.toUpperCase() === "LIST";
+        const upper = trimmed.toUpperCase();
+        expectingCardList = upper === "LIST";
+        if (upper.startsWith("ADD ") || upper.startsWith("DEL ")) {
+          lastPendingActionUid = upper.slice(4).trim();
+        }
         await writer.write(new TextEncoder().encode(`${trimmed}\r\n`));
         logLine("→", trimmed);
         return true;
@@ -1514,6 +2029,7 @@
       }
       uidFeedback.textContent = `Đã gửi lệnh ${prefix} ${uid}.`;
       uidFeedback.classList.remove("err");
+      lastPendingActionUid = uid;
       void sendCommand(`${prefix} ${uid}`);
     }
 
@@ -1530,7 +2046,6 @@
     });
     logFilter.addEventListener("change", renderAllLogs);
 
-    // Tự động tắt auto-scroll nếu người dùng cuộn lên xem log cũ
     consoleElement.addEventListener("scroll", () => {
       const nearBottom = consoleElement.scrollHeight - consoleElement.scrollTop - consoleElement.clientHeight <= 24;
       if (!nearBottom && autoScrollToggle.checked) {
@@ -1540,6 +2055,25 @@
         autoScrollToggle.checked = true;
         savePreferences();
       }
+    });
+
+    // Sự kiện bấm công tắc gạt (Toggle Switch) cho LED Xanh, LED Đỏ và Còi Buzzer
+    switchLedGreen.addEventListener("click", () => {
+      const nextState = !ledGreenOn;
+      setSwitchUiState("green", nextState);
+      void sendCommand(nextState ? "LED GREEN ON" : "LED GREEN OFF");
+    });
+
+    switchLedRed.addEventListener("click", () => {
+      const nextState = !ledRedOn;
+      setSwitchUiState("red", nextState);
+      void sendCommand(nextState ? "LED RED ON" : "LED RED OFF");
+    });
+
+    switchBuzzer.addEventListener("click", () => {
+      const nextState = !buzzerOn;
+      setSwitchUiState("buzzer", nextState);
+      void sendCommand(nextState ? "BUZZER ON" : "BUZZER OFF");
     });
 
     document.querySelectorAll("[data-command]").forEach(button => {
@@ -1558,11 +2092,13 @@
 
     addScannedUidBtn.addEventListener("click", () => {
       if (!lastScannedUid) return;
+      lastPendingActionUid = lastScannedUid;
       void sendCommand(`ADD ${lastScannedUid}`);
     });
 
     delScannedUidBtn.addEventListener("click", () => {
       if (!lastScannedUid) return;
+      lastPendingActionUid = lastScannedUid;
       void sendCommand(`DEL ${lastScannedUid}`);
     });
 
@@ -1572,7 +2108,7 @@
         uidInput.value = formatted;
       }
       if (UID_REGEX.test(formatted)) {
-        uidFeedback.textContent = "Định dạng UID hợp lệ.";
+        uidFeedback.textContent = "Định dạng UID hợp lệ. Bấm '+ Thêm thẻ' hoặc Enter để lưu.";
         uidFeedback.classList.remove("err");
       }
     });
@@ -1585,7 +2121,12 @@
     });
 
     addUidButton.addEventListener("click", () => sendUidAction("ADD"));
-    delUidButton.addEventListener("click", () => sendUidAction("DEL"));
+
+    clearScanHistoryBtn.addEventListener("click", () => {
+      scanHistory = [];
+      saveScanHistory();
+      renderScanHistoryTable();
+    });
 
     commandInput.addEventListener("input", () => {
       charCount.textContent = `${commandInput.value.length}/39`;
@@ -1665,7 +2206,6 @@
       URL.revokeObjectURL(url);
     });
 
-    // Bắt sự kiện rút cáp USB-to-TTL đột ngột
     if ("serial" in navigator) {
       navigator.serial.addEventListener("disconnect", event => {
         if (port && (event.target === port || event.port === port)) {
@@ -1679,6 +2219,8 @@
 
     // Khởi tạo trạng thái ban đầu
     loadPreferences();
+    renderAuthorizedCardsTable();
+    renderScanHistoryTable();
     renderAllLogs();
     updateControlsState();
   </script>

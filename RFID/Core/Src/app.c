@@ -55,6 +55,9 @@ static uint8_t cardLogCount;
 static uint8_t consecutiveInvalidCards;
 static uint8_t enrollmentPending;
 static uint8_t systemLocked;
+static uint8_t manualLedGreen;
+static uint8_t manualLedRed;
+static uint8_t manualBuzzer;
 static volatile uint8_t emergencyButtonPending;
 static uint8_t emergencyButtonWaitingForRelease;
 static uint8_t emergencyButtonReleaseTiming;
@@ -142,13 +145,19 @@ static void Tone(uint32_t frequency, uint32_t duration)
 
 static void noTone(void)
 {
-    HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, manualBuzzer ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 static void LED_AllOff(void)
 {
     HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LED_RED_PORT, LED_RED_PIN, GPIO_PIN_RESET);
+}
+
+static void LED_RestoreManual(void)
+{
+    HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, manualLedGreen ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_RED_PORT, LED_RED_PIN, manualLedRed ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 static void LED_GreenOn(void)
@@ -165,7 +174,7 @@ static void LED_RedOn(void)
 
 static void ShowIdleScreen(void)
 {
-    LED_AllOff();
+    LED_RestoreManual();
     I2C_LCD_Clear(MyI2C_LCD);
     I2C_LCD_SetCursor(MyI2C_LCD, 0, 0);
     I2C_LCD_WriteString(MyI2C_LCD, "Quet the RFID");
@@ -385,6 +394,7 @@ static void ProcessUartCommand(char *command)
     if (strcmp(command, "HELP") == 0)
     {
         UART_Write("Commands: HELP, LIST, ADD uid, DEL uid, ENROLL, OPEN, LOCK, UNLOCK, STATUS, LOG, LOG CLEAR\r\n");
+        UART_Write("IO Ctrl: LED GREEN ON/OFF, LED RED ON/OFF, BUZZER ON/OFF, BEEP\r\n");
         UART_Write("UID format: XX:XX:XX:XX\r\n");
         return;
     }
@@ -600,6 +610,56 @@ static void ProcessUartCommand(char *command)
         UART_Write("OK,LOG CLEARED\r\n");
         return;
     }
+    if (strcmp(command, "LED GREEN ON") == 0)
+    {
+        manualLedGreen = 1U;
+        HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, GPIO_PIN_SET);
+        UART_Write("OK,LED GREEN ON\r\n");
+        return;
+    }
+    if (strcmp(command, "LED GREEN OFF") == 0)
+    {
+        manualLedGreen = 0U;
+        HAL_GPIO_WritePin(LED_GREEN_PORT, LED_GREEN_PIN, GPIO_PIN_RESET);
+        UART_Write("OK,LED GREEN OFF\r\n");
+        return;
+    }
+    if (strcmp(command, "LED RED ON") == 0)
+    {
+        manualLedRed = 1U;
+        HAL_GPIO_WritePin(LED_RED_PORT, LED_RED_PIN, GPIO_PIN_SET);
+        UART_Write("OK,LED RED ON\r\n");
+        return;
+    }
+    if (strcmp(command, "LED RED OFF") == 0)
+    {
+        manualLedRed = 0U;
+        HAL_GPIO_WritePin(LED_RED_PORT, LED_RED_PIN, GPIO_PIN_RESET);
+        UART_Write("OK,LED RED OFF\r\n");
+        return;
+    }
+    if (strcmp(command, "BUZZER ON") == 0)
+    {
+        manualBuzzer = 1U;
+        Tone(1000, 80);
+        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
+        UART_Write("OK,BUZZER ON\r\n");
+        return;
+    }
+    if (strcmp(command, "BUZZER OFF") == 0)
+    {
+        manualBuzzer = 0U;
+        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
+        UART_Write("OK,BUZZER OFF\r\n");
+        return;
+    }
+    if ((strcmp(command, "BEEP") == 0) || (strcmp(command, "BUZZER BEEP") == 0))
+    {
+        Tone(1000, 200);
+        noTone();
+        UART_Write("OK,BUZZER BEEP\r\n");
+        return;
+    }
     UART_Write("ERR,Unknown command. Send HELP\r\n");
 }
 
@@ -633,6 +693,12 @@ void App_ProcessUart(void)
                 uartCommandOverflow = 1;
             }
         }
+    }
+
+    if (manualBuzzer)
+    {
+        Tone(1000, 15);
+        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
     }
 }
 
