@@ -3,229 +3,1334 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>STM32 UART Console</title>
+  <title>STM32 RFID Access Control — UART Console</title>
   <style>
     :root {
       color-scheme: light;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #ffffff;
-      color: #1e293b;
+      --bg-app: #f1f5f9;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-terminal: #0f172a;
+      --bg-terminal-bar: #1e293b;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --border-color: #cbd5e1;
+      --border-subtle: #e2e8f0;
+      --accent: #0284c7;
+      --accent-hover: #0369a1;
+      --accent-subtle: #e0f2fe;
+      --ok-fg: #15803d;
+      --ok-bg: #dcfce7;
+      --ok-border: #86efac;
+      --warn-fg: #b45309;
+      --warn-bg: #fef3c7;
+      --warn-border: #fcd34d;
+      --err-fg: #b91c1c;
+      --err-bg: #fee2e2;
+      --err-border: #fca5a5;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-    body {
-      min-height: 100vh;
+    html, body {
       margin: 0;
-      padding: 32px 16px;
-      background: #ffffff;
+      padding: 0;
+      min-height: 100vh;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
-    main {
-      width: min(850px, 100%);
+    /* Top Bar / Connection Header */
+    .topbar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .topbar-inner {
+      max-width: 1400px;
       margin: 0 auto;
-    }
-
-    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 4vw, 2rem); }
-    .subtitle { margin: 0 0 24px; color: #64748b; }
-
-    .panel {
-      margin-bottom: 16px;
-      padding: 20px;
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      background: #ffffff;
-      box-shadow: 0 8px 24px #0f172a0d;
-    }
-
-    .connection, .send-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
       align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
 
-    .connection { justify-content: space-between; }
-    .status { color: #a16207; font-size: .95rem; }
-    .status.connected { color: #15803d; }
-
-    .scan-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-    .scan-card h2 { margin: 0 0 6px; }
-    .scan-uid { margin: 0; color: #1d4ed8; font: 700 clamp(1.5rem, 5vw, 2rem)/1.2 Consolas, "Courier New", monospace; }
-    .scan-result { margin: 0; color: #a16207; }
-    .scan-result.allowed { color: #15803d; }
-    .scan-result.denied { color: #b91c1c; }
-
-    button, input {
-      min-height: 42px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font: inherit;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    button {
-      padding: 9px 14px;
-      color: #1e293b;
-      background: #f1f5f9;
-      cursor: pointer;
+    .brand-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
     }
 
-    button:hover:not(:disabled) { background: #e2e8f0; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    button.primary { border-color: #3b82f6; color: #ffffff; background: #2563eb; }
-    button.primary:hover:not(:disabled) { background: #1d4ed8; }
-    button.danger { border-color: #fecaca; }
+    .brand-sub {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      padding-left: 12px;
+      border-left: 1px solid var(--border-color);
+    }
 
-    input {
-      min-width: 180px;
-      flex: 1;
-      padding: 9px 12px;
-      color: #1e293b;
-      background: #ffffff;
+    .conn-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+      flex-shrink: 0;
+    }
+
+    .status-badge.connecting {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-fg);
+    }
+    .status-badge.connecting .status-dot {
+      background: #d97706;
+    }
+
+    .status-badge.connected {
+      background: var(--ok-bg);
+      border-color: var(--ok-border);
+      color: var(--ok-fg);
+    }
+    .status-badge.connected .status-dot {
+      background: #16a34a;
+    }
+
+    .status-badge.error {
+      background: var(--err-bg);
+      border-color: var(--err-border);
+      color: var(--err-fg);
+    }
+    .status-badge.error .status-dot {
+      background: #dc2626;
+    }
+
+    .serial-config {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .serial-config label {
+      font-weight: 500;
+    }
+
+    select, input, button {
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    select, input[type="text"] {
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
       outline: none;
     }
 
-    input:focus { border-color: #60a5fa; }
-    h2 { margin: 0 0 14px; font-size: 1.05rem; }
-    .commands { display: flex; flex-wrap: wrap; gap: 8px; }
-    .hint { margin: 12px 0 0; color: #64748b; font-size: .9rem; line-height: 1.5; }
+    select:focus, input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+    }
+
+    select:disabled, input:disabled {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    button {
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.1s ease, border-color 0.1s ease;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--bg-subtle);
+      border-color: #94a3b8;
+    }
+
+    button:active:not(:disabled) {
+      background: #e2e8f0;
+    }
+
+    button:disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    button.danger {
+      color: var(--err-fg);
+      border-color: var(--err-border);
+      background: #fff5f5;
+    }
+
+    button.danger:hover:not(:disabled) {
+      background: var(--err-bg);
+    }
+
+    button.btn-sm {
+      height: 26px;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    /* Warning Banner for Unsupported Browser */
+    .banner {
+      display: none;
+      max-width: 1400px;
+      margin: 12px auto 0;
+      padding: 10px 16px;
+      border-radius: 4px;
+      border: 1px solid var(--err-border);
+      background: var(--err-bg);
+      color: var(--err-fg);
+      font-size: 13px;
+    }
+
+    .banner.visible {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* Main Workspace Grid */
+    .workspace {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 20px 24px;
+      display: grid;
+      grid-template-columns: 440px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .col-left {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 9px 14px;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+
+    .panel-body {
+      padding: 14px;
+    }
+
+    /* Latest Scan Section */
+    .scan-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .scan-main {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+    }
+
+    .scan-uid {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text-primary);
+    }
+
+    .scan-uid.empty {
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 15px;
+    }
+
+    .scan-result {
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      background: #e2e8f0;
+      color: var(--text-secondary);
+    }
+
+    .scan-result.pending {
+      background: var(--warn-bg);
+      color: var(--warn-fg);
+      border: 1px solid var(--warn-border);
+    }
+
+    .scan-result.allowed {
+      background: var(--ok-bg);
+      color: var(--ok-fg);
+      border: 1px solid var(--ok-border);
+    }
+
+    .scan-result.denied {
+      background: var(--err-bg);
+      color: var(--err-fg);
+      border: 1px solid var(--err-border);
+    }
+
+    .scan-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .scan-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* Device Telemetry Grid */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .metric-cell {
+      padding: 8px 10px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .metric-val {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .metric-val.locked { color: var(--err-fg); }
+    .metric-val.unlocked { color: var(--ok-fg); }
+    .metric-val.enroll-on { color: var(--warn-fg); }
+
+    /* Quick Commands Grid */
+    .cmd-group-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin: 0 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .cmd-group-label:not(:first-child) {
+      margin-top: 12px;
+    }
+
+    .commands-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .cmd-btn {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      justify-content: space-between;
+      padding: 0 10px;
+    }
+
+    .cmd-btn .cmd-desc {
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    /* Card UID Manager (ADD / DEL / LIST) */
+    .uid-form {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .uid-input {
+      flex: 1;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .uid-feedback {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .uid-feedback.err {
+      color: var(--err-fg);
+    }
+
+    .card-list-box {
+      margin-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 10px;
+    }
+
+    .card-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .card-items {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .card-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .card-empty {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 4px 0;
+    }
+
+    /* Right Column: Terminal & Raw Command */
+    .terminal-panel {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 88px);
+      min-height: 520px;
+      background: var(--bg-terminal);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .terminal-toolbar {
+      padding: 8px 12px;
+      background: var(--bg-terminal-bar);
+      border-bottom: 1px solid #334155;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #cbd5e1;
+    }
+
+    .terminal-toolbar-left,
+    .terminal-toolbar-right {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: #f8fafc;
+      margin-right: 6px;
+    }
+
+    .filter-select {
+      height: 26px;
+      padding: 0 8px;
+      font-size: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-color: #475569;
+    }
+
+    .term-btn {
+      height: 26px;
+      padding: 0 9px;
+      font-size: 12px;
+      background: #0f172a;
+      color: #cbd5e1;
+      border-color: #475569;
+    }
+
+    .term-btn:hover:not(:disabled) {
+      background: #334155;
+      color: #ffffff;
+      border-color: #64748b;
+    }
+
+    .term-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #cbd5e1;
+      cursor: pointer;
+      user-select: none;
+      margin-right: 4px;
+    }
 
     #console {
-      height: 330px;
-      overflow: auto;
-      padding: 14px;
-      border: 1px solid #e2e8f0;
-      border-radius: 9px;
-      background: #f8fafc;
-      color: #334155;
-      font: .9rem/1.55 Consolas, "Courier New", monospace;
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: #e2e8f0;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
-    .console-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .log-row {
+      display: flex;
+      gap: 8px;
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
 
-    @media (max-width: 520px) {
-      body { padding: 22px 12px; }
-      .panel { padding: 16px; }
-      .connection > * { width: 100%; }
-      #console { height: 280px; }
+    .log-row:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .log-time {
+      color: #64748b;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .log-tag {
+      flex-shrink: 0;
+      font-weight: 600;
+      min-width: 24px;
+      user-select: none;
+    }
+
+    .log-msg {
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .log-row.tx .log-tag,
+    .log-row.tx .log-msg { color: #38bdf8; }
+
+    .log-row.rx .log-tag { color: #94a3b8; }
+    .log-row.rx .log-msg { color: #e2e8f0; }
+
+    .log-row.rx-ok .log-tag,
+    .log-row.rx-ok .log-msg { color: #4ade80; }
+
+    .log-row.rx-warn .log-tag,
+    .log-row.rx-warn .log-msg { color: #fbbf24; }
+
+    .log-row.rx-err .log-tag,
+    .log-row.rx-err .log-msg,
+    .log-row.err .log-tag,
+    .log-row.err .log-msg { color: #f87171; }
+
+    .log-row.info .log-tag,
+    .log-row.info .log-msg { color: #94a3b8; }
+
+    .console-empty {
+      color: #64748b;
+      font-style: italic;
+      padding: 8px 4px;
+    }
+
+    /* Command Input Bar at Bottom of Terminal */
+    .terminal-footer {
+      padding: 10px 12px;
+      background: var(--bg-terminal-bar);
+      border-top: 1px solid #334155;
+    }
+
+    .send-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .cmd-prompt {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: #38bdf8;
+      user-select: none;
+    }
+
+    #commandInput {
+      flex: 1;
+      background: #0f172a;
+      border-color: #475569;
+      color: #f8fafc;
+      font-family: var(--font-mono);
+    }
+
+    #commandInput::placeholder {
+      color: #64748b;
+    }
+
+    .char-counter {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #94a3b8;
+      min-width: 38px;
+      text-align: right;
+    }
+
+    .terminal-hint {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .terminal-hint code {
+      font-family: var(--font-mono);
+      color: #cbd5e1;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .terminal-panel {
+        height: 500px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar { padding: 10px 12px; }
+      .workspace { padding: 12px; }
+      .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
+      .commands-grid { grid-template-columns: repeat(2, 1fr); }
+      .brand-sub { display: none; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <h1>STM32 UART Console</h1>
-    <p class="subtitle">Giao tiếp với mạch RFID qua bộ chuyển USB-to-TTL.</p>
-
-    <section class="panel connection" aria-label="Kết nối UART">
-      <span id="status" class="status">Chưa kết nối</span>
-      <button id="connectButton" class="primary" type="button">Kết nối cổng COM</button>
-      <button id="disconnectButton" type="button" disabled>Ngắt kết nối</button>
-    </section>
-
-    <section class="panel scan-card" aria-live="polite" aria-atomic="true">
-      <div>
-        <h2>Thẻ vừa quét</h2>
-        <p id="latestUid" class="scan-uid">Chưa có thẻ</p>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1 class="brand-title">STM32 UART Console</h1>
+        <span class="brand-sub">RFID Access Control • USART1</span>
       </div>
-      <p id="scanResult" class="scan-result">Kết nối và quét thẻ để xem UID.</p>
-    </section>
 
-    <section class="panel">
-      <h2>Lệnh nhanh</h2>
-      <div class="commands">
-        <button type="button" data-command="HELP">HELP</button>
-        <button type="button" data-command="LIST">LIST</button>
-        <button type="button" data-command="STATUS">STATUS</button>
-        <button type="button" data-command="ENROLL">ENROLL</button>
-        <button type="button" data-command="OPEN">OPEN</button>
-        <button type="button" data-command="LOCK">LOCK</button>
-        <button type="button" data-command="UNLOCK">UNLOCK</button>
-        <button type="button" data-command="LOG">LOG</button>
+      <div class="conn-toolbar" aria-label="Kết nối UART">
+        <div class="serial-config">
+          <label for="baudSelect">Baud:</label>
+          <select id="baudSelect" title="Firmware STM32 mặc định dùng 9600 baud (8N1)">
+            <option value="9600" selected>9600 (Mặc định)</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+
+        <span id="statusBadge" class="status-badge">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status">Chưa kết nối</span>
+        </span>
+
+        <button id="connectButton" class="primary" type="button">Kết nối cổng COM</button>
+        <button id="disconnectButton" class="danger" type="button" disabled>Ngắt kết nối</button>
       </div>
-      <p class="hint">Lệnh thêm/xóa thẻ: nhập <code>ADD XX:XX:XX:XX</code> hoặc <code>DEL XX:XX:XX:XX</code>.</p>
-    </section>
+    </div>
+  </header>
 
-    <section class="panel">
-      <h2>Gửi lệnh</h2>
-      <form id="commandForm" class="send-row">
-        <input id="commandInput" type="text" maxlength="39" autocomplete="off"
-               placeholder="Ví dụ: STATUS" aria-label="Lệnh UART" disabled>
-        <button id="sendButton" class="primary" type="submit" disabled>Gửi</button>
-      </form>
-    </section>
+  <div id="browserWarning" class="banner" role="alert">
+    <span>Trình duyệt hiện tại không hỗ trợ <strong>Web Serial API</strong>. Vui lòng mở file này bằng Google Chrome hoặc Microsoft Edge (trên máy tính, qua HTTPS hoặc file cục bộ).</span>
+  </div>
 
-    <section class="panel">
-      <h2>Nhật ký truyền nhận</h2>
-      <div class="console-actions">
-        <button id="clearButton" type="button">Xóa nhật ký</button>
+  <main class="workspace">
+    <!-- Cột trái: Giám sát thẻ, Trạng thái thiết bị & Điều khiển -->
+    <div class="col-left">
+      <!-- Thẻ vừa quét -->
+      <section class="panel" aria-live="polite" aria-atomic="true">
+        <div class="panel-header">
+          <h2 class="panel-title">Thẻ vừa quét (Real-time Scan)</h2>
+          <span id="scanTimestamp" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">—</span>
+        </div>
+        <div class="panel-body scan-box">
+          <div class="scan-main">
+            <p id="latestUid" class="scan-uid empty">Chưa có thẻ</p>
+            <p id="scanResult" class="scan-result">Chờ quét thẻ</p>
+          </div>
+          <div class="scan-meta">
+            <span>Thao tác nhanh với UID vừa quét:</span>
+            <div class="scan-actions">
+              <button id="useScannedUidBtn" class="btn-sm" type="button" disabled>Điền vào ô UID</button>
+              <button id="addScannedUidBtn" class="btn-sm" type="button" disabled>Gửi ADD</button>
+              <button id="delScannedUidBtn" class="btn-sm" type="button" disabled>Gửi DEL</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trạng thái thiết bị (Đồng bộ từ phản hồi STATUS / sự kiện) -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Trạng thái thiết bị</h2>
+          <button type="button" class="btn-sm" data-command="STATUS" disabled>Làm mới (STATUS)</button>
+        </div>
+        <div class="panel-body">
+          <div class="telemetry-grid">
+            <div class="metric-cell">
+              <div class="metric-label">Hệ thống</div>
+              <div id="statLock" class="metric-val">—</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-label">Chế độ Enroll</div>
+              <div id="statEnroll" class="metric-val">—</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-label">Thẻ hợp lệ</div>
+              <div id="statCards" class="metric-val">—</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-label">Bản ghi Log</div>
+              <div id="statLogs" class="metric-val">—</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-label">Quẹt sai liên tiếp</div>
+              <div id="statInvalid" class="metric-val">—</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-label">RC522 / Cảnh báo</div>
+              <div id="statHardware" class="metric-val">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Lệnh điều khiển nhanh -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Bảng lệnh nhanh</h2>
+          <span style="font-size: 11px; color: var(--text-muted);">Theo giao thức firmware</span>
+        </div>
+        <div class="panel-body">
+          <p class="cmd-group-label">Vận hành &amp; Cửa chắn</p>
+          <div class="commands-grid">
+            <button type="button" class="cmd-btn" data-command="OPEN" disabled>
+              <span>OPEN</span><span class="cmd-desc">Mở barie</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="LOCK" disabled>
+              <span>LOCK</span><span class="cmd-desc">Khóa</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="UNLOCK" disabled>
+              <span>UNLOCK</span><span class="cmd-desc">Mở khóa</span>
+            </button>
+          </div>
+
+          <p class="cmd-group-label">Quản lý thẻ &amp; Tra cứu</p>
+          <div class="commands-grid">
+            <button type="button" class="cmd-btn" data-command="ENROLL" disabled>
+              <span>ENROLL</span><span class="cmd-desc">Quét để thêm</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="LIST" disabled>
+              <span>LIST</span><span class="cmd-desc">DS thẻ</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="STATUS" disabled>
+              <span>STATUS</span><span class="cmd-desc">Trạng thái</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="LOG" disabled>
+              <span>LOG</span><span class="cmd-desc">Xem lịch sử</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="LOG CLEAR" disabled>
+              <span>LOG CLEAR</span><span class="cmd-desc">Xóa lịch sử</span>
+            </button>
+            <button type="button" class="cmd-btn" data-command="HELP" disabled>
+              <span>HELP</span><span class="cmd-desc">Trợ giúp</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quản lý UID thẻ (ADD / DEL) -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Thêm / Xóa thẻ theo UID</h2>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">XX:XX:XX:XX</span>
+        </div>
+        <div class="panel-body">
+          <div class="uid-form">
+            <input id="uidInput" class="uid-input" type="text" maxlength="11" autocomplete="off"
+                   placeholder="VD: 62:99:18:02" aria-label="UID thẻ định dạng XX:XX:XX:XX" disabled>
+            <button id="addUidButton" class="primary" type="button" disabled>ADD</button>
+            <button id="delUidButton" type="button" disabled>DEL</button>
+          </div>
+          <p id="uidFeedback" class="uid-feedback">Nhập 4 byte hex cách nhau bởi dấu hai chấm (tự động chèn <code>:</code> khi gõ).</p>
+
+          <div class="card-list-box">
+            <div class="card-list-header">
+              <span>Danh sách thẻ từ lệnh <code>LIST</code>:</span>
+              <span id="cardListCount" style="font-family: var(--font-mono);">Chưa tải</span>
+            </div>
+            <div id="cardListContainer" class="card-items">
+              <div class="card-empty">Bấm nút LIST để đồng bộ danh sách thẻ từ STM32.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Cột phải: Nhật ký truyền nhận & Gửi lệnh trực tiếp -->
+    <section class="terminal-panel" aria-label="Nhật ký truyền nhận UART">
+      <div class="terminal-toolbar">
+        <div class="terminal-toolbar-left">
+          <span class="terminal-title">UART MONITOR</span>
+          <select id="logFilter" class="filter-select" aria-label="Lọc nhật ký">
+            <option value="all">Tất cả dòng</option>
+            <option value="rx">Chỉ nhận (← RX)</option>
+            <option value="tx">Chỉ gửi (→ TX)</option>
+            <option value="alert">Lỗi &amp; Cảnh báo</option>
+          </select>
+          <span id="logCounter" style="font-family: var(--font-mono); font-size: 11px; color: #94a3b8;">0 dòng</span>
+        </div>
+
+        <div class="terminal-toolbar-right">
+          <label class="term-check">
+            <input id="autoScrollToggle" type="checkbox" checked>
+            <span>Tự cuộn</span>
+          </label>
+          <button id="copyLogButton" class="term-btn" type="button" title="Sao chép toàn bộ nhật ký">Sao chép</button>
+          <button id="downloadLogButton" class="term-btn" type="button" title="Tải nhật ký về máy (.log)">Tải xuống</button>
+          <button id="clearButton" class="term-btn" type="button" title="Xóa nhật ký trên màn hình">Xóa nhật ký</button>
+        </div>
       </div>
+
       <div id="console" role="log" aria-live="polite"></div>
+
+      <div class="terminal-footer">
+        <form id="commandForm" class="send-row">
+          <span class="cmd-prompt" aria-hidden="true">&gt;</span>
+          <input id="commandInput" type="text" maxlength="39" autocomplete="off"
+                 placeholder="Nhập lệnh UART (VD: STATUS, ADD 62:99:18:02)..." aria-label="Lệnh UART" disabled>
+          <span id="charCount" class="char-counter">0/39</span>
+          <button id="sendButton" class="primary" type="submit" disabled>Gửi lệnh</button>
+        </form>
+        <div class="terminal-hint">
+          <span>Giới hạn bộ đệm firmware: tối đa <code>39</code> ký tự + <code>\r\n</code>.</span>
+          <span>Phím tắt: <code>↑</code> / <code>↓</code> gọi lại lệnh cũ • <code>Enter</code> để gửi.</span>
+        </div>
+      </div>
     </section>
   </main>
 
   <script>
+    const statusBadge = document.querySelector("#statusBadge");
     const statusElement = document.querySelector("#status");
+    const baudSelect = document.querySelector("#baudSelect");
     const connectButton = document.querySelector("#connectButton");
     const disconnectButton = document.querySelector("#disconnectButton");
-    const commandInput = document.querySelector("#commandInput");
-    const sendButton = document.querySelector("#sendButton");
-    const commandForm = document.querySelector("#commandForm");
-    const consoleElement = document.querySelector("#console");
+    const browserWarning = document.querySelector("#browserWarning");
+
     const latestUidElement = document.querySelector("#latestUid");
     const scanResultElement = document.querySelector("#scanResult");
+    const scanTimestampElement = document.querySelector("#scanTimestamp");
+    const useScannedUidBtn = document.querySelector("#useScannedUidBtn");
+    const addScannedUidBtn = document.querySelector("#addScannedUidBtn");
+    const delScannedUidBtn = document.querySelector("#delScannedUidBtn");
+
+    const statLock = document.querySelector("#statLock");
+    const statEnroll = document.querySelector("#statEnroll");
+    const statCards = document.querySelector("#statCards");
+    const statLogs = document.querySelector("#statLogs");
+    const statInvalid = document.querySelector("#statInvalid");
+    const statHardware = document.querySelector("#statHardware");
+
+    const uidInput = document.querySelector("#uidInput");
+    const addUidButton = document.querySelector("#addUidButton");
+    const delUidButton = document.querySelector("#delUidButton");
+    const uidFeedback = document.querySelector("#uidFeedback");
+    const cardListCount = document.querySelector("#cardListCount");
+    const cardListContainer = document.querySelector("#cardListContainer");
+
+    const consoleElement = document.querySelector("#console");
+    const logFilter = document.querySelector("#logFilter");
+    const logCounter = document.querySelector("#logCounter");
+    const autoScrollToggle = document.querySelector("#autoScrollToggle");
+    const copyLogButton = document.querySelector("#copyLogButton");
+    const downloadLogButton = document.querySelector("#downloadLogButton");
+    const clearButton = document.querySelector("#clearButton");
+
+    const commandForm = document.querySelector("#commandForm");
+    const commandInput = document.querySelector("#commandInput");
+    const charCount = document.querySelector("#charCount");
+    const sendButton = document.querySelector("#sendButton");
+
+    const MAX_LOG_LINES = 500;
+    const UID_REGEX = /^[0-9A-F]{2}(?::[0-9A-F]{2}){3}$/i;
+    const STORAGE_KEY = "stm32_rfid_uart_prefs_v1";
 
     let port = null;
     let reader = null;
     let writer = null;
     let readTask = null;
+    let connecting = false;
     let disconnecting = false;
     let receiveBuffer = "";
     let pendingScanUid = null;
+    let lastScannedUid = null;
 
-    function setConnected(connected) {
-      statusElement.textContent = connected ? "Đã kết nối • 9600 baud, 8N1" : "Chưa kết nối";
-      statusElement.classList.toggle("connected", connected);
-      connectButton.disabled = connected;
-      disconnectButton.disabled = !connected;
+    let logEntries = [];
+    let commandHistory = [];
+    let historyIndex = -1;
+    let syncedCards = [];
+    let expectingCardList = false;
+
+    // Khôi phục thiết lập an toàn từ localStorage
+    function loadPreferences() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const prefs = JSON.parse(raw);
+        if (prefs.baudRate && baudSelect.querySelector(`option[value="${prefs.baudRate}"]`)) {
+          baudSelect.value = String(prefs.baudRate);
+        }
+        if (typeof prefs.autoScroll === "boolean") {
+          autoScrollToggle.checked = prefs.autoScroll;
+        }
+      } catch {
+        // Bỏ qua nếu localStorage bị chặn
+      }
+    }
+
+    function savePreferences() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          baudRate: Number(baudSelect.value) || 9600,
+          autoScroll: autoScrollToggle.checked
+        }));
+      } catch {
+        // Bỏ qua nếu localStorage bị chặn
+      }
+    }
+
+    function isConnected() {
+      return Boolean(port && writer && !disconnecting);
+    }
+
+    function updateControlsState() {
+      const connected = isConnected();
+      connectButton.disabled = connected || connecting;
+      disconnectButton.disabled = !connected || disconnecting;
+      baudSelect.disabled = connected || connecting;
+
       commandInput.disabled = !connected;
       sendButton.disabled = !connected;
+      uidInput.disabled = !connected;
+      addUidButton.disabled = !connected;
+      delUidButton.disabled = !connected;
+
+      const hasScannedUid = Boolean(lastScannedUid);
+      useScannedUidBtn.disabled = !connected || !hasScannedUid;
+      addScannedUidBtn.disabled = !connected || !hasScannedUid;
+      delScannedUidBtn.disabled = !connected || !hasScannedUid;
+
       document.querySelectorAll("[data-command]").forEach(button => {
+        button.disabled = !connected;
+      });
+      document.querySelectorAll("[data-del-uid]").forEach(button => {
         button.disabled = !connected;
       });
     }
 
-    function logLine(direction, message) {
-      const time = new Date().toLocaleTimeString();
-      consoleElement.textContent += `[${time}] ${direction} ${message}\n`;
-      const lines = consoleElement.textContent.split("\n");
-      if (lines.length > 502) {
-        consoleElement.textContent = lines.slice(-501).join("\n");
+    function setConnectionStatus(state, customText) {
+      statusBadge.className = "status-badge";
+      if (state === "connecting") {
+        statusBadge.classList.add("connecting");
+        statusElement.textContent = customText || "Đang mở cổng...";
+      } else if (state === "connected") {
+        statusBadge.classList.add("connected");
+        const baud = Number(baudSelect.value) || 9600;
+        statusElement.textContent = customText || `Đã kết nối • ${baud} baud, 8N1`;
+      } else if (state === "error") {
+        statusBadge.classList.add("error");
+        statusElement.textContent = customText || "Lỗi kết nối";
+      } else {
+        statusElement.textContent = customText || "Chưa kết nối";
       }
-      consoleElement.scrollTop = consoleElement.scrollHeight;
+      updateControlsState();
     }
 
-    function handleReceivedLine(line) {
-      if (line.length === 0) return;
+    function formatTime(date = new Date()) {
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mm = String(date.getMinutes()).padStart(2, "0");
+      const ss = String(date.getSeconds()).padStart(2, "0");
+      const ms = String(date.getMilliseconds()).padStart(3, "0");
+      return `${hh}:${mm}:${ss}.${ms}`;
+    }
 
-      const scan = line.match(/^SCAN,([0-9A-F]{2}(?::[0-9A-F]{2}){3})$/i);
-      if (scan) {
-        pendingScanUid = scan[1].toUpperCase();
-        latestUidElement.textContent = pendingScanUid;
-        scanResultElement.textContent = "Đang kiểm tra thẻ...";
-        scanResultElement.className = "scan-result";
+    function classifyLogRow(direction, message) {
+      if (direction === "→") return { category: "tx", css: "tx" };
+      if (direction === "LỖI") return { category: "alert", css: "err" };
+      if (direction === "INFO") return { category: "info", css: "info" };
+
+      const upper = message.toUpperCase();
+      if (upper.startsWith("ERR,") || upper.startsWith("ALERT,") || upper.endsWith(",DENY") || upper.includes("(ERR")) {
+        return { category: "rx", isAlert: true, css: "rx-err" };
+      }
+      if (upper.startsWith("READY,") || upper.startsWith("INFO,") || upper.includes("LOCKED")) {
+        return { category: "rx", isAlert: false, css: "rx-warn" };
+      }
+      if (upper.startsWith("OK,") || upper.endsWith(",ALLOW") || upper.includes("SYSTEM READY")) {
+        return { category: "rx", isAlert: false, css: "rx-ok" };
+      }
+      return { category: "rx", isAlert: false, css: "rx" };
+    }
+
+    function matchesActiveFilter(entry) {
+      const filter = logFilter.value;
+      if (filter === "all") return true;
+      if (filter === "rx") return entry.category === "rx";
+      if (filter === "tx") return entry.category === "tx";
+      if (filter === "alert") return entry.category === "alert" || entry.isAlert;
+      return true;
+    }
+
+    function createLogRowElement(entry) {
+      const row = document.createElement("div");
+      row.className = `log-row ${entry.css}`;
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "log-time";
+      timeSpan.textContent = `[${entry.time}]`;
+
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "log-tag";
+      tagSpan.textContent = entry.direction;
+
+      const msgSpan = document.createElement("span");
+      msgSpan.className = "log-msg";
+      msgSpan.textContent = entry.message;
+
+      row.append(timeSpan, tagSpan, msgSpan);
+      return row;
+    }
+
+    function renderAllLogs() {
+      consoleElement.textContent = "";
+      const filtered = logEntries.filter(matchesActiveFilter);
+      if (filtered.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "console-empty";
+        empty.textContent = logEntries.length === 0
+          ? "Chưa có dữ liệu truyền nhận. Hãy kết nối cổng COM để bắt đầu."
+          : "Không có dòng nhật ký nào khớp bộ lọc hiện tại.";
+        consoleElement.appendChild(empty);
+      } else {
+        const fragment = document.createDocumentFragment();
+        filtered.forEach(entry => fragment.appendChild(createLogRowElement(entry)));
+        consoleElement.appendChild(fragment);
+      }
+      logCounter.textContent = `${logEntries.length} dòng`;
+      if (autoScrollToggle.checked) {
+        consoleElement.scrollTop = consoleElement.scrollHeight;
+      }
+    }
+
+    function logLine(direction, message) {
+      const time = formatTime();
+      const meta = classifyLogRow(direction, message);
+      const entry = {
+        time,
+        direction,
+        message,
+        category: meta.category,
+        isAlert: Boolean(meta.isAlert),
+        css: meta.css
+      };
+
+      logEntries.push(entry);
+      if (logEntries.length > MAX_LOG_LINES) {
+        logEntries.shift();
+        renderAllLogs();
+        return;
       }
 
-      const result = line.match(/^LOG,\d+,([0-9A-F]{2}(?::[0-9A-F]{2}){3}),(ALLOW|DENY)$/i);
-      if (result && pendingScanUid === result[1].toUpperCase()) {
-        const allowed = result[2].toUpperCase() === "ALLOW";
-        scanResultElement.textContent = allowed ? "Được phép truy cập" : "Từ chối truy cập";
-        scanResultElement.className = `scan-result ${allowed ? "allowed" : "denied"}`;
-        pendingScanUid = null;
+      logCounter.textContent = `${logEntries.length} dòng`;
+      if (!matchesActiveFilter(entry)) return;
+
+      const emptyEl = consoleElement.querySelector(".console-empty");
+      if (emptyEl) emptyEl.remove();
+
+      consoleElement.appendChild(createLogRowElement(entry));
+      if (autoScrollToggle.checked) {
+        consoleElement.scrollTop = consoleElement.scrollHeight;
+      }
+    }
+
+    function renderCardList() {
+      cardListContainer.textContent = "";
+      cardListCount.textContent = `${syncedCards.length} thẻ`;
+
+      if (syncedCards.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "card-empty";
+        empty.textContent = "Danh sách trống hoặc chưa có thẻ nào được lưu.";
+        cardListContainer.appendChild(empty);
+        return;
+      }
+
+      const connected = isConnected();
+      syncedCards.forEach(uid => {
+        const item = document.createElement("div");
+        item.className = "card-item";
+
+        const uidSpan = document.createElement("span");
+        uidSpan.textContent = uid;
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn-sm danger";
+        delBtn.dataset.delUid = uid;
+        delBtn.disabled = !connected;
+        delBtn.textContent = "DEL";
+        delBtn.addEventListener("click", () => {
+          void sendCommand(`DEL ${uid}`);
+        });
+
+        item.append(uidSpan, delBtn);
+        cardListContainer.appendChild(item);
+      });
+    }
+
+    function updateTelemetryLock(locked) {
+      statLock.textContent = locked ? "LOCKED (Đã khóa)" : "UNLOCKED (Mở)";
+      statLock.className = `metric-val ${locked ? "locked" : "unlocked"}`;
+    }
+
+    function updateTelemetryEnroll(ready) {
+      statEnroll.textContent = ready ? "READY (Chờ quét)" : "OFF";
+      statEnroll.className = `metric-val ${ready ? "enroll-on" : ""}`;
+    }
+
+    function handleReceivedLine(rawLine) {
+      const line = rawLine.trim();
+      if (line.length === 0) return;
+
+      // 1. Bắt sự kiện quét thẻ: SCAN,XX:XX:XX:XX
+      const scanMatch = line.match(/^SCAN,([0-9A-F]{2}(?::[0-9A-F]{2}){3})$/i);
+      if (scanMatch) {
+        pendingScanUid = scanMatch[1].toUpperCase();
+        lastScannedUid = pendingScanUid;
+        latestUidElement.textContent = pendingScanUid;
+        latestUidElement.classList.remove("empty");
+        scanResultElement.textContent = "Đang kiểm tra thẻ...";
+        scanResultElement.className = "scan-result pending";
+        scanTimestampElement.textContent = new Date().toLocaleTimeString();
+        updateControlsState();
+      }
+
+      // 2. Bắt kết quả truy cập: LOG,<tick>,XX:XX:XX:XX,ALLOW|DENY
+      const logMatch = line.match(/^LOG,(\d+),([0-9A-F]{2}(?::[0-9A-F]{2}){3}),(ALLOW|DENY)$/i);
+      if (logMatch) {
+        const logUid = logMatch[2].toUpperCase();
+        const allowed = logMatch[3].toUpperCase() === "ALLOW";
+        if (pendingScanUid === logUid) {
+          scanResultElement.textContent = allowed ? "Được phép truy cập (ALLOW)" : "Từ chối truy cập (DENY)";
+          scanResultElement.className = `scan-result ${allowed ? "allowed" : "denied"}`;
+          pendingScanUid = null;
+        }
+      }
+
+      // 3. Bắt phản hồi STATUS: STATUS,LOCKED|UNLOCKED,CARDS=x,LOGS=x,INVALID=x,ENROLL=READY|OFF
+      const statusMatch = line.match(/^STATUS,(LOCKED|UNLOCKED),CARDS=(\d+),LOGS=(\d+),INVALID=(\d+),ENROLL=(READY|OFF)$/i);
+      if (statusMatch) {
+        updateTelemetryLock(statusMatch[1].toUpperCase() === "LOCKED");
+        statCards.textContent = statusMatch[2];
+        statLogs.textContent = statusMatch[3];
+        statInvalid.textContent = statusMatch[4];
+        updateTelemetryEnroll(statusMatch[5].toUpperCase() === "READY");
+      }
+
+      // 4. Bắt phản hồi danh sách thẻ từ lệnh LIST: CARDS,<count> và CARD,XX:XX:XX:XX
+      const cardsHeaderMatch = line.match(/^CARDS,(\d+)$/i);
+      if (cardsHeaderMatch) {
+        const expected = Number(cardsHeaderMatch[1]);
+        syncedCards = [];
+        expectingCardList = expected > 0;
+        statCards.textContent = String(expected);
+        renderCardList();
+      } else {
+        const cardItemMatch = line.match(/^CARD,([0-9A-F]{2}(?::[0-9A-F]{2}){3})$/i);
+        if (cardItemMatch && expectingCardList) {
+          const cardUid = cardItemMatch[1].toUpperCase();
+          if (!syncedCards.includes(cardUid)) {
+            syncedCards.push(cardUid);
+          }
+          renderCardList();
+        }
+      }
+
+      // 5. Bắt các phản hồi trạng thái tức thời từ firmware
+      const upper = line.toUpperCase();
+      if (upper === "OK,SYSTEM LOCKED") {
+        updateTelemetryLock(true);
+      } else if (upper === "OK,SYSTEM UNLOCKED") {
+        updateTelemetryLock(false);
+      } else if (upper === "READY,SCAN CARD TO ENROLL") {
+        updateTelemetryEnroll(true);
+      } else if (upper.startsWith("OK,ENROLLED,") || upper.startsWith("INFO,CARD ALREADY EXISTS,")) {
+        updateTelemetryEnroll(false);
+      } else if (upper === "OK,LOG CLEARED") {
+        statLogs.textContent = "0";
+      } else if (upper.startsWith("RC522 VER:")) {
+        statHardware.textContent = line.replace(/^RC522 Ver:\s*/i, "");
+      } else if (upper.startsWith("ALERT,")) {
+        statHardware.textContent = line.replace(/^ALERT,/i, "");
+        statHardware.className = "metric-val locked";
       }
 
       logLine("←", line);
+    }
+
+    function formatSerialError(error) {
+      if (!error) return "Lỗi không xác định.";
+      if (error.name === "NotFoundError") {
+        return "Đã hủy chọn cổng COM.";
+      }
+      if (error.name === "SecurityError") {
+        return "Trình duyệt từ chối quyền truy cập cổng nối tiếp.";
+      }
+      if (error.name === "NetworkError" || /Failed to open serial port/i.test(error.message)) {
+        return "Không thể mở cổng COM (cổng có thể đang bị phần mềm khác như STM32CubeIDE / Putty chiếm giữ).";
+      }
+      if (error.name === "InvalidStateError") {
+        return "Cổng nối tiếp đang ở trạng thái không hợp lệ.";
+      }
+      return error.message || String(error);
     }
 
     async function readFromPort(currentPort) {
@@ -249,101 +1354,333 @@
         }
       } catch (error) {
         if (!disconnecting) {
-          logLine("LỖI", `Không thể đọc cổng nối tiếp: ${error.message}`);
+          logLine("LỖI", `Ngắt luồng đọc dữ liệu: ${formatSerialError(error)}`);
+          setConnectionStatus("error", "Mất kết nối thiết bị");
         }
       } finally {
+        receiveBuffer += decoder.decode();
         if (receiveBuffer.length > 0) {
           handleReceivedLine(receiveBuffer);
           receiveBuffer = "";
         }
-        if (!disconnecting) void disconnect();
-      }
-    }
-
-    async function connect() {
-      if (!("serial" in navigator)) {
-        logLine("LỖI", "Trình duyệt không hỗ trợ Web Serial. Hãy dùng Chrome/Edge trên HTTPS hoặc localhost.");
-        return;
-      }
-
-      try {
-        port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600, dataBits: 8, stopBits: 1, parity: "none" });
-        disconnecting = false;
-        writer = port.writable.getWriter();
-        setConnected(true);
-        logLine("INFO", "Đã mở cổng. Nhập HELP để xem lệnh.");
-        readTask = readFromPort(port);
-      } catch (error) {
-        logLine("LỖI", `Không kết nối được: ${error.message}`);
-        if (port) {
-          try { await port.close(); } catch (closeError) {
-            logLine("LỖI", `Không thể đóng cổng: ${closeError.message}`);
-          }
-          port = null;
+        if (!disconnecting && port === currentPort) {
+          await disconnect();
         }
       }
     }
 
-    async function disconnect() {
-      if (!port) return;
-      disconnecting = true;
+    async function connect() {
+      if (connecting || isConnected()) return;
+
+      if (!("serial" in navigator)) {
+        browserWarning.classList.add("visible");
+        logLine("LỖI", "Trình duyệt không hỗ trợ Web Serial API. Hãy dùng Chrome hoặc Edge trên máy tính.");
+        return;
+      }
+
+      connecting = true;
+      setConnectionStatus("connecting", "Đang chọn cổng...");
+
       try {
-        if (reader) await reader.cancel();
+        const selectedPort = await navigator.serial.requestPort();
+        const baudRate = Number(baudSelect.value) || 9600;
+        setConnectionStatus("connecting", `Đang mở cổng (${baudRate} baud)...`);
+
+        await selectedPort.open({
+          baudRate,
+          dataBits: 8,
+          stopBits: 1,
+          parity: "none"
+        });
+
+        port = selectedPort;
+        disconnecting = false;
+        writer = port.writable.getWriter();
+        connecting = false;
+        setConnectionStatus("connected");
+        logLine("INFO", `Đã mở cổng nối tiếp (${baudRate} baud, 8N1). Gửi HELP hoặc STATUS để kiểm tra.`);
+
+        readTask = readFromPort(port);
+        commandInput.focus();
+      } catch (error) {
+        connecting = false;
+        if (error && error.name === "NotFoundError") {
+          setConnectionStatus("disconnected", "Chưa kết nối");
+          logLine("INFO", "Đã hủy hộp thoại chọn cổng COM.");
+        } else {
+          setConnectionStatus("error", "Kết nối thất bại");
+          logLine("LỖI", `Không kết nối được: ${formatSerialError(error)}`);
+        }
+        if (port) {
+          try {
+            await port.close();
+          } catch {
+            // Bỏ qua lỗi đóng cổng khi mở thất bại
+          }
+          port = null;
+        }
+        updateControlsState();
+      }
+    }
+
+    async function disconnect() {
+      if (!port || disconnecting) return;
+      disconnecting = true;
+      updateControlsState();
+
+      try {
+        if (reader) {
+          try {
+            await reader.cancel();
+          } catch {
+            // Bỏ qua lỗi khi hủy reader
+          }
+        }
         if (writer) {
-          writer.releaseLock();
+          try {
+            writer.releaseLock();
+          } catch {
+            // Bỏ qua lỗi releaseLock
+          }
           writer = null;
         }
         if (readTask) {
           const task = readTask;
           readTask = null;
-          await task;
-        }
-        if (port.readable && port.readable.locked) {
-          logLine("LỖI", "Không thể đóng cổng vì luồng đọc vẫn đang được sử dụng.");
-          return;
+          try {
+            await task;
+          } catch {
+            // Bỏ qua lỗi chờ task kết thúc
+          }
         }
         await port.close();
         port = null;
         receiveBuffer = "";
-        setConnected(false);
-        logLine("INFO", "Đã ngắt kết nối.");
+        setConnectionStatus("disconnected", "Chưa kết nối");
+        logLine("INFO", "Đã ngắt kết nối cổng COM.");
       } catch (error) {
-        logLine("LỖI", `Không thể ngắt kết nối: ${error.message}`);
+        logLine("LỖI", `Không thể ngắt kết nối: ${formatSerialError(error)}`);
+        port = null;
+        writer = null;
+        setConnectionStatus("disconnected", "Chưa kết nối");
       } finally {
         disconnecting = false;
+        updateControlsState();
       }
     }
 
     async function sendCommand(command) {
       const trimmed = command.trim();
-      if (!trimmed || !writer) return;
-      if (trimmed.length > 39) {
-        logLine("LỖI", "Lệnh dài tối đa 39 ký tự theo giới hạn firmware.");
-        return;
+      if (!trimmed) return false;
+
+      if (!writer || !isConnected()) {
+        logLine("LỖI", "Chưa kết nối cổng COM. Không thể gửi lệnh.");
+        return false;
       }
+
+      if (trimmed.length > 39) {
+        logLine("LỖI", "Lệnh dài tối đa 39 ký tự theo giới hạn bộ đệm firmware.");
+        return false;
+      }
+
       try {
+        expectingCardList = trimmed.toUpperCase() === "LIST";
         await writer.write(new TextEncoder().encode(`${trimmed}\r\n`));
         logLine("→", trimmed);
+        return true;
       } catch (error) {
-        logLine("LỖI", `Không gửi được lệnh: ${error.message}`);
+        logLine("LỖI", `Không gửi được lệnh: ${formatSerialError(error)}`);
+        return false;
       }
     }
 
-    connectButton.addEventListener("click", connect);
-    disconnectButton.addEventListener("click", disconnect);
-    document.querySelectorAll("[data-command]").forEach(button => {
-      button.addEventListener("click", () => sendCommand(button.dataset.command));
+    // Tự động chuẩn hóa ô nhập UID theo định dạng XX:XX:XX:XX
+    function formatUidInputValue(raw) {
+      const hexOnly = raw.replace(/[^0-9a-fA-F]/g, "").toUpperCase().slice(0, 8);
+      const pairs = [];
+      for (let i = 0; i < hexOnly.length; i += 2) {
+        pairs.push(hexOnly.slice(i, i + 2));
+      }
+      return pairs.join(":");
+    }
+
+    function sendUidAction(prefix) {
+      const uid = uidInput.value.trim().toUpperCase();
+      if (!UID_REGEX.test(uid)) {
+        uidFeedback.textContent = "UID không hợp lệ. Hãy nhập đủ 4 byte hex theo dạng XX:XX:XX:XX (VD: 62:99:18:02).";
+        uidFeedback.classList.add("err");
+        uidInput.focus();
+        return;
+      }
+      uidFeedback.textContent = `Đã gửi lệnh ${prefix} ${uid}.`;
+      uidFeedback.classList.remove("err");
+      void sendCommand(`${prefix} ${uid}`);
+    }
+
+    // Đăng ký sự kiện
+    connectButton.addEventListener("click", () => void connect());
+    disconnectButton.addEventListener("click", () => void disconnect());
+
+    baudSelect.addEventListener("change", savePreferences);
+    autoScrollToggle.addEventListener("change", () => {
+      savePreferences();
+      if (autoScrollToggle.checked) {
+        consoleElement.scrollTop = consoleElement.scrollHeight;
+      }
     });
+    logFilter.addEventListener("change", renderAllLogs);
+
+    // Tự động tắt auto-scroll nếu người dùng cuộn lên xem log cũ
+    consoleElement.addEventListener("scroll", () => {
+      const nearBottom = consoleElement.scrollHeight - consoleElement.scrollTop - consoleElement.clientHeight <= 24;
+      if (!nearBottom && autoScrollToggle.checked) {
+        autoScrollToggle.checked = false;
+        savePreferences();
+      } else if (nearBottom && !autoScrollToggle.checked) {
+        autoScrollToggle.checked = true;
+        savePreferences();
+      }
+    });
+
+    document.querySelectorAll("[data-command]").forEach(button => {
+      button.addEventListener("click", () => {
+        void sendCommand(button.dataset.command);
+      });
+    });
+
+    useScannedUidBtn.addEventListener("click", () => {
+      if (!lastScannedUid) return;
+      uidInput.value = lastScannedUid;
+      uidFeedback.textContent = `Đã điền UID ${lastScannedUid} vào ô nhập.`;
+      uidFeedback.classList.remove("err");
+      uidInput.focus();
+    });
+
+    addScannedUidBtn.addEventListener("click", () => {
+      if (!lastScannedUid) return;
+      void sendCommand(`ADD ${lastScannedUid}`);
+    });
+
+    delScannedUidBtn.addEventListener("click", () => {
+      if (!lastScannedUid) return;
+      void sendCommand(`DEL ${lastScannedUid}`);
+    });
+
+    uidInput.addEventListener("input", () => {
+      const formatted = formatUidInputValue(uidInput.value);
+      if (uidInput.value !== formatted) {
+        uidInput.value = formatted;
+      }
+      if (UID_REGEX.test(formatted)) {
+        uidFeedback.textContent = "Định dạng UID hợp lệ.";
+        uidFeedback.classList.remove("err");
+      }
+    });
+
+    uidInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendUidAction("ADD");
+      }
+    });
+
+    addUidButton.addEventListener("click", () => sendUidAction("ADD"));
+    delUidButton.addEventListener("click", () => sendUidAction("DEL"));
+
+    commandInput.addEventListener("input", () => {
+      charCount.textContent = `${commandInput.value.length}/39`;
+    });
+
+    commandInput.addEventListener("keydown", event => {
+      if (event.key === "ArrowUp") {
+        if (commandHistory.length === 0) return;
+        event.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+        }
+        commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+        charCount.textContent = `${commandInput.value.length}/39`;
+      } else if (event.key === "ArrowDown") {
+        if (commandHistory.length === 0) return;
+        event.preventDefault();
+        if (historyIndex > 0) {
+          historyIndex--;
+          commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+        } else {
+          historyIndex = -1;
+          commandInput.value = "";
+        }
+        charCount.textContent = `${commandInput.value.length}/39`;
+      }
+    });
+
     commandForm.addEventListener("submit", async event => {
       event.preventDefault();
-      await sendCommand(commandInput.value);
-      commandInput.value = "";
-      commandInput.focus();
+      const raw = commandInput.value.trim();
+      if (!raw) return;
+
+      const sent = await sendCommand(raw);
+      if (sent) {
+        if (commandHistory[commandHistory.length - 1] !== raw) {
+          commandHistory.push(raw);
+          if (commandHistory.length > 50) commandHistory.shift();
+        }
+        historyIndex = -1;
+        commandInput.value = "";
+        charCount.textContent = "0/39";
+        commandInput.focus();
+      }
     });
-    document.querySelector("#clearButton").addEventListener("click", () => {
-      consoleElement.textContent = "";
+
+    clearButton.addEventListener("click", () => {
+      logEntries = [];
+      renderAllLogs();
     });
+
+    copyLogButton.addEventListener("click", async () => {
+      if (logEntries.length === 0) return;
+      const text = logEntries.map(e => `[${e.time}] ${e.direction} ${e.message}`).join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+        const prev = copyLogButton.textContent;
+        copyLogButton.textContent = "Đã chép";
+        setTimeout(() => { copyLogButton.textContent = prev; }, 1200);
+      } catch {
+        logLine("LỖI", "Không thể sao chép vào clipboard.");
+      }
+    });
+
+    downloadLogButton.addEventListener("click", () => {
+      if (logEntries.length === 0) return;
+      const text = logEntries.map(e => `[${e.time}] ${e.direction} ${e.message}`).join("\r\n") + "\r\n";
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      link.href = url;
+      link.download = `stm32-uart-${stamp}.log`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Bắt sự kiện rút cáp USB-to-TTL đột ngột
+    if ("serial" in navigator) {
+      navigator.serial.addEventListener("disconnect", event => {
+        if (port && (event.target === port || event.port === port)) {
+          logLine("LỖI", "Thiết bị USB-to-TTL vừa bị ngắt kết nối vật lý.");
+          void disconnect();
+        }
+      });
+    } else {
+      browserWarning.classList.add("visible");
+    }
+
+    // Khởi tạo trạng thái ban đầu
+    loadPreferences();
+    renderAllLogs();
+    updateControlsState();
   </script>
 </body>
 </html>
