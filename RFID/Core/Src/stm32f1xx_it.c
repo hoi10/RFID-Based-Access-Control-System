@@ -27,6 +27,7 @@
 #include "uart.h"
 #if APP_USE_FREERTOS
 #include "FreeRTOS.h"
+#include "task.h"
 extern void xPortSysTickHandler(void);
 #endif
 /* USER CODE END Includes */
@@ -199,7 +200,10 @@ void SysTick_Handler(void)
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
 #if APP_USE_FREERTOS
-  xPortSysTickHandler();
+  if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+  {
+    xPortSysTickHandler();
+  }
 #endif
 
   /* USER CODE END SysTick_IRQn 1 */
@@ -215,7 +219,7 @@ void SysTick_Handler(void)
 /* USER CODE BEGIN 1 */
 void USART1_IRQHandler(void)
 {
-  if (USART1->SR & USART_SR_RXNE)
+  if (USART1->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_FE | USART_SR_NE))
   {
     uart_rx_irq_handler();
   }

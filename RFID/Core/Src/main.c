@@ -12,10 +12,11 @@
 
 I2C_HandleTypeDef hi2c1;
 TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim2;
 
 #if APP_USE_FREERTOS
 static QueueHandle_t cardQueue;
+static TaskHandle_t rfidTaskHandle;
+static TaskHandle_t appTaskHandle;
 #endif
 
 void SystemClock_Config(void);
@@ -32,12 +33,10 @@ static void RFIDTask(void *argument)
     {
         if (App_RFIDPoll(&event))
         {
-            if (xQueueSend(cardQueue, &event, portMAX_DELAY) != pdPASS)
-            {
-                Error_Handler();
-            }
+            BaseType_t sent = xQueueSend(cardQueue, &event, 0U);
+            App_NotifyCardQueueResult((sent == pdPASS) ? 1U : 0U);
         }
-        vTaskDelay(pdMS_TO_TICKS(80));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -49,11 +48,6 @@ static void CardDisplayTask(void *argument)
     for (;;)
     {
         App_ProcessUart();
-        if (App_PollEmergencyButton())
-        {
-            event.type = APP_EVENT_EMERGENCY_OPEN;
-            App_HandleCard(&event);
-        }
         if (xQueueReceive(cardQueue, &event, pdMS_TO_TICKS(20)) == pdPASS)
         {
             App_HandleCard(&event);
@@ -84,16 +78,17 @@ int main(void)
     App_Init();
 
 #if APP_USE_FREERTOS
-    cardQueue = xQueueCreate(1, sizeof(AppCardEvent));
+    cardQueue = xQueueCreate(4U, sizeof(AppCardEvent));
     if (cardQueue == NULL)
     {
         Error_Handler();
     }
-    if (xTaskCreate(RFIDTask, "RFID", 256, NULL, tskIDLE_PRIORITY + 2, NULL) != pdPASS ||
-        xTaskCreate(CardDisplayTask, "CardUI", 384, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+    if ((xTaskCreate(RFIDTask, "RFID", 256U, NULL, tskIDLE_PRIORITY + 2U, &rfidTaskHandle) != pdPASS) ||
+        (xTaskCreate(CardDisplayTask, "CardUI", 512U, NULL, tskIDLE_PRIORITY + 1U, &appTaskHandle) != pdPASS))
     {
         Error_Handler();
     }
+    App_SetTaskHandles(rfidTaskHandle, appTaskHandle);
     vTaskStartScheduler();
     Error_Handler();
 #endif
@@ -103,17 +98,12 @@ int main(void)
 #if !APP_USE_FREERTOS
         AppCardEvent event;
         App_ProcessUart();
-        if (App_PollEmergencyButton())
-        {
-            event.type = APP_EVENT_EMERGENCY_OPEN;
-            App_HandleCard(&event);
-        }
-        else if (App_RFIDPoll(&event))
+        if (App_RFIDPoll(&event))
         {
             App_HandleCard(&event);
         }
         App_ProcessUart();
-        HAL_Delay(80);
+        HAL_Delay(50);
 #else
         __WFI();
 #endif
@@ -181,32 +171,25 @@ static void MX_GPIO_Init(void)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0 | GPIO_PIN_10, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
+    /* Cấu hình PA4 (LED Xanh) và PA5 (LED Đỏ) */
     GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // Cấu hình PB0 (RC522 RST) và PB10 (Buzzer)
+    /* Cấu hình PB0 (RC522 RST) và PB10 (Buzzer) - Không sử dụng PB1 */
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_10;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    AFIO->EXTICR[0] = (AFIO->EXTICR[0] & ~AFIO_EXTICR1_EXTI1) |
-                      AFIO_EXTICR1_EXTI1_PB;
-    GPIO_InitStruct.Pin = GPIO_PIN_1;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    HAL_NVIC_SetPriority(EXTI1_IRQn, 7, 0);
-    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-
+    /* Cấu hình PB12 (RC522 CS) */
     GPIO_InitStruct.Pin = GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }
 

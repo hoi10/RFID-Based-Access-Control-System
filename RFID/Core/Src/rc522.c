@@ -1,166 +1,142 @@
 #include "rc522.h"
-
-static void RC522_Delay_us(uint32_t us)
-{
-    for (volatile uint32_t i = 0; i < us * 12; i++)
-    {
-        __NOP();
-    }
-}
+#include <stdio.h>
+#include <string.h>
 
 static uchar RC522_SPI_Transfer(uchar data)
 {
-    uchar received = 0;
+    uchar received = 0U;
 
-    for (uchar mask = 0x80; mask != 0; mask >>= 1)
+    for (uchar mask = 0x80U; mask != 0U; mask >>= 1)
     {
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, (data & mask) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        RC522_Delay_us(2);
+        /* 1. Giữ SCK = LOW, xuất bit dữ liệu ra MOSI (PB15) */
+        HAL_GPIO_WritePin(MFRC522_SCK_PORT, MFRC522_SCK_PIN, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(MFRC522_MOSI_PORT, MFRC522_MOSI_PIN,
+                          (data & mask) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
-        RC522_Delay_us(2);
+        /* Thời gian thiết lập (Setup time) trước cạnh lên SCK */
+        for (volatile uint8_t settle = 0U; settle < 8U; settle++)
+        {
+            __NOP();
+        }
 
-        received = (received << 1) | (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == GPIO_PIN_SET);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);
-        RC522_Delay_us(1);
+        /* 2. Cạnh lên SCK = HIGH (RC522 chốt MOSI, MISO đã ổn định) */
+        HAL_GPIO_WritePin(MFRC522_SCK_PORT, MFRC522_SCK_PIN, GPIO_PIN_SET);
+
+        for (volatile uint8_t settle = 0U; settle < 4U; settle++)
+        {
+            __NOP();
+        }
+
+        /* 3. Đọc MISO (PB14) khi SCK đang ở mức HIGH */
+        received = (uchar)((received << 1) |
+                           ((HAL_GPIO_ReadPin(MFRC522_MISO_PORT, MFRC522_MISO_PIN) == GPIO_PIN_SET) ? 1U : 0U));
+
+        for (volatile uint8_t settle = 0U; settle < 4U; settle++)
+        {
+            __NOP();
+        }
+
+        /* 4. Cạnh xuống SCK = LOW (RC522 dịch bit MISO tiếp theo) */
+        HAL_GPIO_WritePin(MFRC522_SCK_PORT, MFRC522_SCK_PIN, GPIO_PIN_RESET);
     }
 
     return received;
 }
 
-/*
- * Function Name: Write_MFRC522
- * Function Description: To a certain MFRC522 register to write a byte of data
- * Input Parameters: addr - register address; val - the value to be written
- * Return value: None
- */
 void Write_MFRC522(uchar addr, uchar val)
 {
-	/* CS LOW */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
-	RC522_Delay_us(5);
-
-    RC522_SPI_Transfer((addr << 1) & 0x7E);
-    RC522_SPI_Transfer(val);
-
-	/* CS HIGH */
-	RC522_Delay_us(5);
-	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
-	RC522_Delay_us(5);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+    (void)RC522_SPI_Transfer((uchar)((addr << 1) & 0x7EU));
+    (void)RC522_SPI_Transfer(val);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
 }
 
-/*
- * Function Name: Read_MFRC522
- * Description: From a certain MFRC522 read a byte of data register
- * Input Parameters: addr - register address
- * Returns: a byte of data read from the module
- */
 uchar Read_MFRC522(uchar addr)
 {
     uchar val;
 
-	/* CS LOW */
-	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
-	RC522_Delay_us(5);
-
-    RC522_SPI_Transfer(((addr << 1) & 0x7E) | 0x80);
-    val = RC522_SPI_Transfer(0x00);
-
-	/* CS HIGH */
-	RC522_Delay_us(5);
-	HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
-	RC522_Delay_us(5);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+    (void)RC522_SPI_Transfer((uchar)(((addr << 1) & 0x7EU) | 0x80U));
+    val = RC522_SPI_Transfer(0x00U);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
 
     return val;
 }
 
 static void Read_MFRC522_FIFO(uchar *buffer, uchar length)
 {
-    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
-    RC522_Delay_us(5);
+    const uchar readAddr = (uchar)(((FIFODataReg << 1) & 0x7EU) | 0x80U);
 
-    RC522_SPI_Transfer(((FIFODataReg << 1) & 0x7E) | 0x80);
-    for (uchar i = 0; i < length; i++)
+    if ((buffer == NULL) || (length == 0U))
     {
-        buffer[i] = RC522_SPI_Transfer(0x00);
+        return;
     }
-
-    RC522_Delay_us(5);
+    HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_RESET);
+    (void)RC522_SPI_Transfer(readAddr);
+    for (uchar i = 0U; i < length; i++)
+    {
+        uchar nextAddr = (i < (uchar)(length - 1U)) ? readAddr : 0x00U;
+        buffer[i] = RC522_SPI_Transfer(nextAddr);
+    }
     HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
-    RC522_Delay_us(5);
 }
 
-/*
- * Function Name: SetBitMask
- * Description: Set RC522 register bit
- * Input parameters: reg - register address; mask - set value
- * Return value: None
- */
 void SetBitMask(uchar reg, uchar mask)
 {
-    uchar tmp;
-    tmp = Read_MFRC522(reg);
-    Write_MFRC522(reg, tmp | mask);  // set bit mask
+    uchar tmp = Read_MFRC522(reg);
+    Write_MFRC522(reg, (uchar)(tmp | mask));
 }
 
-/*
- * Function Name: ClearBitMask
- * Description: clear RC522 register bit
- * Input parameters: reg - register address; mask - clear bit value
- * Return value: None
-*/
 void ClearBitMask(uchar reg, uchar mask)
 {
-    uchar tmp;
-    tmp = Read_MFRC522(reg);
-    Write_MFRC522(reg, tmp & (~mask));  // clear bit mask
+    uchar tmp = Read_MFRC522(reg);
+    Write_MFRC522(reg, (uchar)(tmp & (uchar)(~mask)));
 }
 
-/*
- * Function Name: AntennaOn
- * Description: Open antennas, each time you start or shut down the natural barrier between the transmitter should be at least 1ms interval
- * Input: None
- * Return value: None
- */
 void AntennaOn(void)
 {
-    // Bit 7 (InvTx2RFOn) = 1: TX2 đảo pha 180 độ so với TX1 (bắt buộc để phát điện áp vi sai trên anten)
-    // Bit 1 (Tx2RFEn) = 1, Bit 0 (Tx1RFEn) = 1: Bật cả 2 transistor công suất TX1 và TX2
-    Write_MFRC522(TxControlReg, 0x83);
+    uchar temp = Read_MFRC522(TxControlReg);
+    if ((temp & 0x03U) != 0x03U)
+    {
+        SetBitMask(TxControlReg, 0x03U);
+    }
 }
 
-/*
-  * Function Name: AntennaOff
-  * Description: Close antennas, each time you start or shut down the natural barrier between the transmitter should be at least 1ms interval
-  * Input: None
-  * Return value: None
- */
 void AntennaOff(void)
 {
-	ClearBitMask(TxControlReg, 0x03);
+    ClearBitMask(TxControlReg, 0x03U);
 }
 
-/*
- * Function Name: MFRC522_Reset
- * Description: Reset RC522
- * Input: None
- * Return value: None
- */
 void MFRC522_Reset(void)
 {
     Write_MFRC522(CommandReg, PCD_RESETPHASE);
 }
 
-/*
- * Function Name: MFRC522_Init
- * Description: Initialize RC522
- * Input: None
- * Return value: None
-*/
 uchar MFRC522_ReadVersion(void)
 {
     return Read_MFRC522(VersionReg);
+}
+
+// Timer reload cho REQA/WUPA, Anticoll, Select va HLTA (8 ticks = 4.0ms)
+#define RC522_TIMER_RELOAD_FAST   0x0008U
+
+static void MFRC522_SetTimerReload(uint16_t reloadTicks)
+{
+    Write_MFRC522(TReloadRegH, (uchar)((reloadTicks >> 8) & 0xFFU));
+    Write_MFRC522(TReloadRegL, (uchar)(reloadTicks & 0xFFU));
+}
+
+static uint8_t MFRC522_WaitSoftResetDone(uint32_t timeoutMs)
+{
+    uint32_t start = HAL_GetTick();
+    while ((uint32_t)(HAL_GetTick() - start) < timeoutMs)
+    {
+        if ((Read_MFRC522(CommandReg) & 0x10U) == 0U)
+        {
+            return 1U;
+        }
+    }
+    return ((Read_MFRC522(CommandReg) & 0x10U) == 0U) ? 1U : 0U;
 }
 
 void MFRC522_Init(void)
@@ -168,224 +144,317 @@ void MFRC522_Init(void)
     GPIO_InitTypeDef gpioInit = {0};
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_SPI2_CLK_DISABLE(); // Tắt ngoại vi SPI2 để giải phóng hoàn toàn PB12..PB15 về GPIO
+    __HAL_RCC_SPI2_CLK_DISABLE();
 
-    // Cấu hình đồng bộ PB0 (RST), PB12 (CS), PB13 (SCK), PB15 (MOSI) với High Speed
-    gpioInit.Pin = GPIO_PIN_0 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_15;
+    /* Cấu hình PB0 (RST), PB12 (CS), PB13 (SCK), PB15 (MOSI) */
+    gpioInit.Pin = MFRC522_RST_PIN | MFRC522_CS_PIN | MFRC522_SCK_PIN | MFRC522_MOSI_PIN;
     gpioInit.Mode = GPIO_MODE_OUTPUT_PP;
     gpioInit.Pull = GPIO_NOPULL;
-    gpioInit.Speed = GPIO_SPEED_FREQ_HIGH;
+    gpioInit.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &gpioInit);
 
-    gpioInit.Pin = GPIO_PIN_14;
+    /* Cấu hình PB14 (MISO) Input Pull-up */
+    gpioInit.Pin = MFRC522_MISO_PIN;
     gpioInit.Mode = GPIO_MODE_INPUT;
     gpioInit.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOB, &gpioInit);
 
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13 | GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, MFRC522_SCK_PIN | MFRC522_MOSI_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(MFRC522_CS_PORT, MFRC522_CS_PIN, GPIO_PIN_SET);
 
-    // Hard reset RC522: kéo RST xuống LOW rồi lên HIGH
+    /* Hard Reset qua chân PB0 */
     HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_RESET);
-    HAL_Delay(20);
+    HAL_Delay(10);
     HAL_GPIO_WritePin(MFRC522_RST_PORT, MFRC522_RST_PIN, GPIO_PIN_SET);
     HAL_Delay(50);
 
-    // Soft reset
+    /* Soft Reset và chờ bit PowerDown (bit 4 của CommandReg) về 0 */
     MFRC522_Reset();
-    HAL_Delay(20);
+    (void)MFRC522_WaitSoftResetDone(50U);
 
-    // Cấu hình Timer RC522 theo thông số chuẩn NXP/Arduino:
-    // f_timer = 40kHz (chu kỳ 25us), Timeout = 1000 * 25us = 25ms
-    Write_MFRC522(TModeReg, 0x80);          // Tauto=1
-    Write_MFRC522(TPrescalerReg, 0xA9);     // TPrescaler = 0x0A9 (169)
-    Write_MFRC522(TReloadRegH, 0x03);       // Reload = 0x03E8 (1000)
-    Write_MFRC522(TReloadRegL, 0xE8);
+    /* Cấu hình tường minh tốc độ 106 kBd, tắt CRC cứng ban đầu, bật RxNoErr (0x08) và đặt độ rộng xung Miller */
+    Write_MFRC522(TxModeReg, 0x00U);
+    Write_MFRC522(RxModeReg, 0x08U);
+    Write_MFRC522(ModWidthReg, 0x26U);
 
-    Write_MFRC522(TxModeReg, 0x00);
-    Write_MFRC522(RxModeReg, 0x00);
-    Write_MFRC522(ModWidthReg, 0x26);
+    /* Cấu hình Timer nội: TPrescaler = 0x0D3E (3390) -> 0.5ms/tick; TReload mặc định = 8 ticks (4ms) cho quét thẻ */
+    Write_MFRC522(TModeReg, 0x8DU);
+    Write_MFRC522(TPrescalerReg, 0x3EU);
+    MFRC522_SetTimerReload(RC522_TIMER_RELOAD_FAST);
 
-    Write_MFRC522(TxAutoReg, 0x40);         // 100% ASK modulation
-    Write_MFRC522(ModeReg, 0x3D);           // CRC initial 0x6363
+    /* Điều chế 100% ASK (bắt buộc cho ISO14443A) và giá trị khởi tạo CRC 0x6363 */
+    Write_MFRC522(TxAutoReg, 0x40U);
+    Write_MFRC522(ModeReg, 0x3DU);
 
-    // Cấu hình độ nhạy Anten tối ưu (RxGain = 43dB - 0x68) rất nhạy cho chip clone 0x82 mà không bị bão hòa
-    Write_MFRC522(RFCfgReg, 0x68);
+    /* Độ lợi bộ thu 48dB (bits [6:4] = 111b, các bit dự trữ [3:0] = 0) */
+    Write_MFRC522(RFCfgReg, 0x70U);
 
-    // Bật anten phát trường RF
+    /* Bật Anten và chờ trường RF ổn định */
     AntennaOn();
+    HAL_Delay(5);
 }
 
-/*
- * Function Name: MFRC522_ToCard
- * Description: RC522 and ISO14443 card communication
- * Input Parameters: command - MF522 command word,
- *			 sendData--RC522 sent to the card by the data
- *			 sendLen--Length of data sent
- *			 backData--Received the card returns data,
- *			 backLen--Return data bit length
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_ToCard(uchar command, uchar *sendData, uchar sendLen, uchar *backData, uint *backLen)
+void MFRC522_CheckAndRecover(void)
+{
+    uchar txCtrl = Read_MFRC522(TxControlReg);
+    uchar ver = Read_MFRC522(VersionReg);
+    if (((txCtrl & 0x03U) != 0x03U) || (ver == 0x00U) || (ver == 0xFFU))
+    {
+        MFRC522_Init();
+    }
+}
+
+static uchar MFRC522_TransceiveEx(uchar command,
+                                  const uchar *sendData,
+                                  uchar sendLen,
+                                  uchar *backData,
+                                  uint *backLen,
+                                  uchar errMask)
 {
     uchar status = MI_ERR;
-    uchar irqEn = 0x00;
-    uchar waitIRq = 0x00;
-    uchar lastBits;
-    uchar n;
+    uchar irqEn = 0x00U;
+    uchar waitIRq = 0x00U;
+    uchar n = 0U;
     uint i;
+
+    if (backLen != NULL)
+    {
+        *backLen = 0U;
+    }
 
     switch (command)
     {
-        case PCD_AUTHENT:		// Certification cards close
-		{
-			irqEn = 0x12;
-			waitIRq = 0x10;
-			break;
-		}
-		case PCD_TRANSCEIVE:	// Transmit FIFO data
-		{
-			irqEn = 0x77;
-			waitIRq = 0x30;
-			break;
-		}
-		default:
-			break;
+        case PCD_AUTHENT:
+            irqEn = 0x12U;
+            waitIRq = 0x10U;
+            break;
+        case PCD_TRANSCEIVE:
+            irqEn = 0x77U;
+            waitIRq = 0x30U; /* RxIRq | IdleIRq */
+            break;
+        default:
+            break;
     }
 
-    Write_MFRC522(CommIEnReg, irqEn|0x80);	// Interrupt request
-    Write_MFRC522(CommIrqReg, 0x7F);			// Clear all interrupt request bit (chuẩn datasheet NXP)
-    SetBitMask(FIFOLevelReg, 0x80);			// FlushBuffer=1, FIFO Initialization
+    /* 1. Dung lenh cu, xoa co ngat va lam sach FIFO */
+    Write_MFRC522(CommandReg, PCD_IDLE);
+    Write_MFRC522(CommIEnReg, (uchar)(irqEn | 0x80U));
+    Write_MFRC522(CommIrqReg, 0x7FU);
+    Write_MFRC522(FIFOLevelReg, 0x80U);
 
-	Write_MFRC522(CommandReg, PCD_IDLE);	// NO action; Cancel the current command
-
-	// Writing data to the FIFO
-    for (i=0; i<sendLen; i++)
+    /* 2. Nap du lieu vao FIFO */
+    for (i = 0U; i < sendLen; i++)
     {
-		Write_MFRC522(FIFODataReg, sendData[i]);
-	}
+        Write_MFRC522(FIFODataReg, sendData[i]);
+    }
 
-    // Execute the command
-	Write_MFRC522(CommandReg, command);
+    /* 3. Phat lenh */
+    Write_MFRC522(CommandReg, command);
     if (command == PCD_TRANSCEIVE)
     {
-		SetBitMask(BitFramingReg, 0x80);		// StartSend=1,transmission of data starts
-	}
+        SetBitMask(BitFramingReg, 0x80U);
+    }
 
-    // Waiting to receive data to complete
-	i = 2000;	// i according to the clock frequency adjustment, the operator M1 card maximum waiting time 25ms
+    /* 4. Cho hoan tat hoac timeout */
+    i = 2500U;
     do
     {
-		//CommIrqReg[7..0]
-		//Set1 TxIRq RxIRq IdleIRq HiAlerIRq LoAlertIRq ErrIRq TimerIRq
         n = Read_MFRC522(CommIrqReg);
         i--;
-    }
-    while ((i!=0) && !(n&0x01) && !(n&waitIRq));
+    } while ((i != 0U) && ((n & 0x01U) == 0U) && ((n & waitIRq) == 0U));
 
-    ClearBitMask(BitFramingReg, 0x80);			//StartSend=0
+    ClearBitMask(BitFramingReg, 0x80U);
 
-    // Nếu timeout không nhận được phản hồi từ thẻ
-    if ((i == 0) || (!(n & waitIRq) && (n & 0x01)))
+    uchar capturedIrq = (uchar)(n | Read_MFRC522(CommIrqReg));
+    uchar capturedErr = Read_MFRC522(ErrorReg);
+    uchar capturedFifoLevel = (uchar)(Read_MFRC522(FIFOLevelReg) & 0x7FU);
+    uchar capturedLastBits = (uchar)(Read_MFRC522(ControlReg) & 0x07U);
+    uint16_t rxBits = 0U;
+
+    if (capturedFifoLevel > 0U)
     {
-        return MI_NOTAGERR;
-    }
-
-    // Bỏ qua bit CollErr (0x08) và CRCErr (0x04) trong khung REQA; chỉ bắt BufferOvfl/ParityErr/ProtocolErr
-    if (Read_MFRC522(ErrorReg) & 0x13)
-    {
-        return MI_ERR;
-    }
-
-    status = MI_OK;
-
-    if (command == PCD_TRANSCEIVE)
-    {
-        n = Read_MFRC522(FIFOLevelReg);
-        lastBits = Read_MFRC522(ControlReg) & 0x07;
-        if (lastBits)
+        if (capturedLastBits != 0U)
         {
-            *backLen = (n-1)*8 + lastBits;
+            rxBits = (uint16_t)(((uint16_t)(capturedFifoLevel - 1U) * 8U) + capturedLastBits);
         }
         else
         {
-            *backLen = n*8;
+            rxBits = (uint16_t)((uint16_t)capturedFifoLevel * 8U);
         }
+    }
 
-        if (n == 0)
+    /* Doc du lieu tu FIFO */
+    if ((command == PCD_TRANSCEIVE) && (backData != NULL) && (capturedFifoLevel > 0U))
+    {
+        uchar readBytes = capturedFifoLevel;
+        if (readBytes > MAX_LEN)
         {
-            n = 1;
+            readBytes = MAX_LEN;
         }
-        if (n > MAX_LEN)
-        {
-            n = MAX_LEN;
-        }
+        Read_MFRC522_FIFO(backData, readBytes);
+    }
 
-        Read_MFRC522_FIFO(backData, n);
+    if (backLen != NULL)
+    {
+        *backLen = (uint)rxBits;
+    }
+
+    /* Don dep sau giao dich */
+    Write_MFRC522(CommandReg, PCD_IDLE);
+    SetBitMask(ControlReg, 0x80U);
+    Write_MFRC522(FIFOLevelReg, 0x80U);
+    Write_MFRC522(CommIrqReg, 0x7FU);
+
+    /* Phan loai trang thai */
+    if (i == 0U)
+    {
+        status = MI_ERR;
+    }
+    else if ((capturedErr & RC522_ERR_COLL) != 0U)
+    {
+        status = MI_COLLERR;
+    }
+    else if ((capturedErr & errMask) != 0U)
+    {
+        status = MI_ERR;
+    }
+    else if ((command == PCD_TRANSCEIVE) && (capturedFifoLevel == 0U) && (rxBits == 0U))
+    {
+        status = MI_NOTAGERR;
+    }
+    else if ((capturedIrq & 0x01U) != 0U)
+    {
+        status = MI_ERR;
+    }
+    else
+    {
+        status = MI_OK;
     }
 
     return status;
 }
 
-/*
- * Function Name: MFRC522_Request
- * Description: Find cards, read the card type number
- * Input parameters: reqMode - find cards way
- *   TagType - Return Card Type
- *    0x4400 = Mifare_UltraLight
- *    0x0400 = Mifare_One(S50)
- *    0x0200 = Mifare_One(S70)
- *    0x0800 = Mifare_Pro(X)
- *    0x4403 = Mifare_DESFire
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_Request(uchar reqMode, uchar *TagType)
+uchar MFRC522_CalculateCRC(const uchar *pIndata, uchar len, uchar *pOutData)
 {
-	uchar status;
-	uint backBits = 0;			 // The received data bits
+    uchar i;
+    uchar n;
 
-	Write_MFRC522(BitFramingReg, 0x07);		//TxLastBists = BitFramingReg[2..0]
-	ClearBitMask(CollReg, 0x80);
+    if ((pIndata == NULL) || (pOutData == NULL) || (len == 0U))
+    {
+        return MI_ERR;
+    }
 
-	TagType[0] = reqMode;
-	status = MFRC522_ToCard(PCD_TRANSCEIVE, TagType, 1, TagType, &backBits);
+    /* 1. Dừng lệnh hiện tại */
+    Write_MFRC522(CommandReg, PCD_IDLE);
 
-	if ((status != MI_OK) || (backBits == 0))
-	{
-		status = MI_ERR;
-	}
+    /* 2. Xóa cờ CRCIRq cũ trong DivIrqReg (Set2 = 0, bit 2 CRCIRq = 1 -> ghi 0x04) */
+    Write_MFRC522(DivIrqReg, 0x04U);
 
-	return status;
+    /* 3. Xóa sạch FIFO trước khi nạp dữ liệu tính CRC */
+    Write_MFRC522(FIFOLevelReg, 0x80U);
+
+    for (i = 0U; i < len; i++)
+    {
+        Write_MFRC522(FIFODataReg, pIndata[i]);
+    }
+
+    /* 4. Kích hoạt lệnh tính CRC */
+    Write_MFRC522(CommandReg, PCD_CALCCRC);
+
+    /* 5. Chờ cờ CRCIRq mới bật lên trong thời gian cho phép */
+    i = 0xFFU;
+    do
+    {
+        n = Read_MFRC522(DivIrqReg);
+        i--;
+    } while ((i != 0U) && ((n & 0x04U) == 0U));
+
+    /* Dừng lệnh PCD_CALCCRC */
+    Write_MFRC522(CommandReg, PCD_IDLE);
+
+    if ((n & 0x04U) == 0U)
+    {
+        return MI_ERR;
+    }
+
+    /* 6. Chỉ đọc CRCResultRegL/H khi CRCIRq của lần tính hiện tại đã bật */
+    pOutData[0] = Read_MFRC522(CRCResultRegL);
+    pOutData[1] = Read_MFRC522(CRCResultRegH);
+    return MI_OK;
 }
 
-/*
- * Function Name: MFRC522_Anticoll
- * Description: Anti-collision detection, reading selected card serial number card
- * Input parameters: serNum - returns 4 bytes card serial number, the first 5 bytes for the checksum byte
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_Anticoll(uchar *serNum)
+uchar MFRC522_Request(uchar reqMode, uchar *TagType)
+{
+    uchar status;
+    uint backBits = 0U;
+    uchar cmdBuf[2] = {reqMode, 0U};
+
+    MFRC522_SetTimerReload(RC522_TIMER_RELOAD_FAST);
+
+    /* Tắt CRC phần cứng cả phát và thu, đặt khung ngắn 7-bit (TxLastBits = 7) */
+    ClearBitMask(TxModeReg, 0x80U);
+    ClearBitMask(RxModeReg, 0x80U);
+    Write_MFRC522(BitFramingReg, 0x07U);
+
+    status = MFRC522_TransceiveEx(PCD_TRANSCEIVE, cmdBuf, 1U, TagType, &backBits,
+                                  RC522_ERR_MASK_NO_CRC);
+
+    if (status == MI_OK)
+    {
+        if (backBits != 0x10U)
+        {
+            status = MI_ERR;
+        }
+    }
+
+    return status;
+}
+
+uchar MFRC522_AnticollCL(uchar cascadeCode, uchar *clFrame5)
 {
     uchar status;
     uchar i;
-	uchar serNumCheck=0;
-    uint unLen = 0;
+    uchar bccCheck = 0U;
+    uint unLen = 0U;
+    uchar cmdBuf[2];
+    uchar rxBuf[MAX_LEN] = {0};
 
-	Write_MFRC522(BitFramingReg, 0x00);		//TxLastBists = BitFramingReg[2..0]
+    if (clFrame5 == NULL)
+    {
+        return MI_ERR;
+    }
 
-    serNum[0] = PICC_ANTICOLL;
-    serNum[1] = 0x20;
-    status = MFRC522_ToCard(PCD_TRANSCEIVE, serNum, 2, serNum, &unLen);
+    MFRC522_SetTimerReload(RC522_TIMER_RELOAD_FAST);
+
+    /* Tắt CRC phần cứng, truyền đủ 8-bit/byte, đặt ValuesAfterColl = 0 (xóa các bit sau va chạm) */
+    ClearBitMask(TxModeReg, 0x80U);
+    ClearBitMask(RxModeReg, 0x80U);
+    Write_MFRC522(BitFramingReg, 0x00U);
+    ClearBitMask(CollReg, 0x80U);
+
+    cmdBuf[0] = cascadeCode;
+    cmdBuf[1] = 0x20U;
+
+    status = MFRC522_TransceiveEx(PCD_TRANSCEIVE, cmdBuf, 2U, rxBuf, &unLen,
+                                  RC522_ERR_MASK_NO_CRC);
     if (status != MI_OK)
     {
-        return MI_NOTAGERR;
+        return status;
     }
 
-    for (i=0; i<4; i++)
-	{
-        serNumCheck ^= serNum[i];
+    if (unLen != 40U)
+    {
+        return MI_ERR;
     }
-    if (serNumCheck != serNum[4])
+
+    for (i = 0U; i < 4U; i++)
+    {
+        clFrame5[i] = rxBuf[i];
+        bccCheck ^= rxBuf[i];
+    }
+    clFrame5[4] = rxBuf[4];
+
+    if (bccCheck != clFrame5[4])
     {
         return MI_ERR;
     }
@@ -393,196 +462,155 @@ uchar MFRC522_Anticoll(uchar *serNum)
     return MI_OK;
 }
 
-
-/*
- * Function Name: CalulateCRC
- * Description: CRC calculation with MF522
- * Input parameters: pIndata - To read the CRC data, len - the data length, pOutData - CRC calculation results
- * Return value: None
- */
-void CalulateCRC(uchar *pIndata, uchar len, uchar *pOutData)
+uchar MFRC522_SelectCL(uchar cascadeCode, const uchar *clFrame5, uchar *sakOut)
 {
-    uchar i, n;
-
-    ClearBitMask(DivIrqReg, 0x04);			//CRCIrq = 0
-    SetBitMask(FIFOLevelReg, 0x80);			//Clear the FIFO pointer
-
-    //Writing data to the FIFO
-    for (i=0; i<len; i++)
-    {
-		Write_MFRC522(FIFODataReg, *(pIndata+i));
-	}
-    Write_MFRC522(CommandReg, PCD_CALCCRC);
-
-    //Wait CRC calculation is complete
-    i = 0xFF;
-    do
-    {
-        n = Read_MFRC522(DivIrqReg);
-        i--;
-    }
-    while ((i!=0) && !(n&0x04));			//CRCIrq = 1
-
-    //Read CRC calculation result
-    pOutData[0] = Read_MFRC522(CRCResultRegL);
-    pOutData[1] = Read_MFRC522(CRCResultRegH);
-}
-
-/*
- * Function Name: MFRC522_SelectTag
- * Description: election card, read the card memory capacity
- * Input parameters: serNum - Incoming card serial number
- * Return value: the successful return of card capacity
- */
-uchar MFRC522_SelectTag(uchar *serNum)
-{
-	uchar i;
-	uchar status;
-	uchar size;
-	uint recvBits;
-	uchar buffer[9];
-
-	//ClearBitMask(Status2Reg, 0x08);			//MFCrypto1On=0
-
-    buffer[0] = PICC_SElECTTAG;
-    buffer[1] = 0x70;
-    for (i=0; i<5; i++)
-    {
-    	buffer[i+2] = *(serNum+i);
-    }
-	CalulateCRC(buffer, 7, &buffer[7]);
-    status = MFRC522_ToCard(PCD_TRANSCEIVE, buffer, 9, buffer, &recvBits);
-
-    if ((status == MI_OK) && (recvBits == 0x18))
-    {
-		size = buffer[0];
-	}
-    else
-    {
-		size = 0;
-	}
-
-    return size;
-}
-
-/*
- * Function Name: MFRC522_Auth
- * Description: Verify card password
- * Input parameters: authMode - Password Authentication Mode
-                 0x60 = A key authentication
-                 0x61 = Authentication Key B
-             BlockAddr--Block address
-             Sectorkey--Sector password
-             serNum--Card serial number, 4-byte
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_Auth(uchar authMode, uchar BlockAddr, uchar *Sectorkey, uchar *serNum)
-{
-    uchar status;
-    uint recvBits;
     uchar i;
-	uchar buff[12];
-
-	//Verify the command block address + sector + password + card serial number
-    buff[0] = authMode;
-    buff[1] = BlockAddr;
-    for (i=0; i<6; i++)
-    {
-		buff[i+2] = *(Sectorkey+i);
-	}
-    for (i=0; i<4; i++)
-    {
-		buff[i+8] = *(serNum+i);
-	}
-    status = MFRC522_ToCard(PCD_AUTHENT, buff, 12, buff, &recvBits);
-
-    if ((status != MI_OK) || (!(Read_MFRC522(Status2Reg) & 0x08)))
-    {
-		status = MI_ERR;
-	}
-
-    return status;
-}
-
-/*
- * Function Name: MFRC522_Read
- * Description: Read block data
- * Input parameters: blockAddr - block address; recvData - read block data
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_Read(uchar blockAddr, uchar *recvData)
-{
     uchar status;
-    uint unLen;
+    uint recvBits = 0U;
+    uchar buffer[9];
+    uchar rxBuf[MAX_LEN] = {0};
+    uchar expectedCrc[2] = {0};
 
-    recvData[0] = PICC_READ;
-    recvData[1] = blockAddr;
-    CalulateCRC(recvData,2, &recvData[2]);
-    status = MFRC522_ToCard(PCD_TRANSCEIVE, recvData, 4, recvData, &unLen);
-
-    if ((status != MI_OK) || (unLen != 0x90))
+    if (clFrame5 == NULL)
     {
-        status = MI_ERR;
+        return MI_ERR;
     }
 
-    return status;
+    MFRC522_SetTimerReload(RC522_TIMER_RELOAD_FAST);
+    Write_MFRC522(BitFramingReg, 0x00U);
+
+    buffer[0] = cascadeCode;
+    buffer[1] = 0x70U;
+    for (i = 0U; i < 5U; i++)
+    {
+        buffer[i + 2U] = clFrame5[i];
+    }
+
+    if (MFRC522_CalculateCRC(buffer, 7U, &buffer[7]) != MI_OK)
+    {
+        return MI_ERR;
+    }
+
+    /* Kiểm tra đầy đủ cả CRCErr (0x04) với mặt nạ RC522_ERR_MASK_WITH_CRC (0x1F) */
+    status = MFRC522_TransceiveEx(PCD_TRANSCEIVE, buffer, 9U, rxBuf, &recvBits,
+                                  RC522_ERR_MASK_WITH_CRC);
+    if (status != MI_OK)
+    {
+        return status;
+    }
+
+    /* Phản hồi SAK chuẩn gồm 1 byte SAK + 2 byte CRC_A = 24 bits (0x18) */
+    if (recvBits != 0x18U)
+    {
+        return MI_ERR;
+    }
+
+    if (MFRC522_CalculateCRC(&rxBuf[0], 1U, expectedCrc) != MI_OK)
+    {
+        return MI_ERR;
+    }
+
+    if ((rxBuf[1] != expectedCrc[0]) || (rxBuf[2] != expectedCrc[1]))
+    {
+        return MI_ERR;
+    }
+
+    if (sakOut != NULL)
+    {
+        *sakOut = rxBuf[0];
+    }
+
+    return MI_OK;
 }
 
-/*
- * Function Name: MFRC522_Write
- * Description: Write block data
- * Input parameters: blockAddr - block address; writeData - to 16-byte data block write
- * Return value: the successful return MI_OK
- */
-uchar MFRC522_Write(uchar blockAddr, uchar *writeData)
+uchar MFRC522_ReadCardCascade(uchar reqMode, MFRC522_CardInfo *cardInfo)
 {
+    static const uchar cascadeLevels[3] = {
+        PICC_ANTICOLL_CL1,
+        PICC_ANTICOLL_CL2,
+        PICC_ANTICOLL_CL3
+    };
     uchar status;
-    uint recvBits;
-    uchar i;
-	uchar buff[18];
+    uchar clFrame[5];
+    uchar sak = 0U;
+    uint8_t uidIndex = 0U;
 
-    buff[0] = PICC_WRITE;
-    buff[1] = blockAddr;
-    CalulateCRC(buff, 2, &buff[2]);
-    status = MFRC522_ToCard(PCD_TRANSCEIVE, buff, 4, buff, &recvBits);
-
-    if ((status != MI_OK) || (recvBits != 4) || ((buff[0] & 0x0F) != 0x0A))
+    if (cardInfo == NULL)
     {
-		status = MI_ERR;
-	}
+        return MI_ERR;
+    }
 
-    if (status == MI_OK)
+    memset(cardInfo, 0, sizeof(*cardInfo));
+
+    /* Bước 1: Gửi REQA (0x26) hoặc WUPA (0x52) đúng khung 7-bit */
+    status = MFRC522_Request(reqMode, cardInfo->atqa);
+    if (status != MI_OK)
     {
-        for (i=0; i<16; i++)		//Data to the FIFO write 16Byte
+        return status;
+    }
+
+    /* Bước 2: Chạy qua các Cascade Level (CL1 -> CL2 -> CL3) theo bit 2 (0x04) của SAK */
+    for (uint8_t level = 0U; level < 3U; level++)
+    {
+        status = MFRC522_AnticollCL(cascadeLevels[level], clFrame);
+        if (status != MI_OK)
         {
-        	buff[i] = *(writeData+i);
+            /* Đã nhận ATQA hợp lệ ở Bước 1 (có bằng chứng RF của thẻ), nếu lỗi ở Anticoll thì trả về MI_COLLERR hoặc MI_ERR */
+            return (status == MI_COLLERR) ? MI_COLLERR : MI_ERR;
         }
-        CalulateCRC(buff, 16, &buff[16]);
-        status = MFRC522_ToCard(PCD_TRANSCEIVE, buff, 18, buff, &recvBits);
 
-		if ((status != MI_OK) || (recvBits != 4) || ((buff[0] & 0x0F) != 0x0A))
+        status = MFRC522_SelectCL(cascadeLevels[level], clFrame, &sak);
+        if (status != MI_OK)
         {
-			status = MI_ERR;
-		}
+            return (status == MI_COLLERR) ? MI_COLLERR : MI_ERR;
+        }
+
+        /* Kiểm tra bit Cascade (bit 2 = 0x04) trong SAK */
+        if ((sak & 0x04U) != 0U)
+        {
+            /* UID chưa hoàn chỉnh: byte 0 bắt buộc là Cascade Tag (0x88) */
+            if ((clFrame[0] != PICC_CASCADE_TAG) || (level >= 2U))
+            {
+                return MI_ERR;
+            }
+            cardInfo->uid[uidIndex++] = clFrame[1];
+            cardInfo->uid[uidIndex++] = clFrame[2];
+            cardInfo->uid[uidIndex++] = clFrame[3];
+        }
+        else
+        {
+            /* UID đã hoàn chỉnh ở Cascade Level hiện tại */
+            cardInfo->uid[uidIndex++] = clFrame[0];
+            cardInfo->uid[uidIndex++] = clFrame[1];
+            cardInfo->uid[uidIndex++] = clFrame[2];
+            cardInfo->uid[uidIndex++] = clFrame[3];
+            cardInfo->uidLen = uidIndex;
+            cardInfo->sak = sak;
+            return MI_OK;
+        }
     }
 
-    return status;
+    return MI_ERR;
 }
 
-/*
- * Function Name: MFRC522_Halt
- * Description: Command card into hibernation
- * Input: None
- * Return value: None
- */
-void MFRC522_Halt(void)
+uchar MFRC522_Halt(void)
 {
-	uint unLen;
-	uchar buff[4];
+    uint unLen = 0U;
+    uchar buff[4];
+    uchar rxDummy[MAX_LEN] = {0};
 
-	buff[0] = PICC_HALT;
-	buff[1] = 0;
-	CalulateCRC(buff, 2, &buff[2]);
+    MFRC522_SetTimerReload(RC522_TIMER_RELOAD_FAST);
+    Write_MFRC522(BitFramingReg, 0x00U);
 
-	MFRC522_ToCard(PCD_TRANSCEIVE, buff, 4, buff,&unLen);
+    buff[0] = PICC_HALT;
+    buff[1] = 0x00U;
+
+    if (MFRC522_CalculateCRC(buff, 2U, &buff[2]) != MI_OK)
+    {
+        return MI_ERR;
+    }
+
+    uchar status = MFRC522_TransceiveEx(PCD_TRANSCEIVE, buff, 4U, rxDummy, &unLen, RC522_ERR_MASK_HALT);
+    return (status == MI_NOTAGERR) ? MI_OK : status;
 }
+

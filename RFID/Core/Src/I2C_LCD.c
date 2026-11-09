@@ -13,6 +13,12 @@
 #include "I2C_LCD.h"
 #include "I2C_LCD_cfg.h"
 #include "DWT_Delay.h"
+#include "app_config.h"
+
+#if APP_USE_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+#endif
 
 /*-----------------------[INTERNAL DEFINITIONS]-----------------------*/
 // CMD
@@ -68,11 +74,83 @@ static I2C_LCD_InfoParam_t I2C_LCD_InfoParam_g[I2C_LCD_MAX];
 
 /*---------------------[STATIC INTERNAL FUNCTIONS]-----------------------*/
 
+static void I2C_LCD_RecoverBus(I2C_HandleTypeDef *hi2c)
+{
+    if ((hi2c == NULL) || (hi2c->Instance == NULL))
+    {
+        return;
+    }
+
+    /* Đọc SR1 và SR2 để xóa cờ ADDR nếu đang bị treo sau khi gửi địa chỉ */
+    (void)hi2c->Instance->SR1;
+    (void)hi2c->Instance->SR2;
+
+    /* Phát điều kiện STOP để giải phóng bus */
+    SET_BIT(hi2c->Instance->CR1, I2C_CR1_STOP);
+    DWT_Delay_us(50);
+
+    /* Nếu cờ BUSY của ngoại vi I2C1 vẫn kẹt, thực hiện SWRST và khởi tạo lại I2C1 */
+    if (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) != RESET)
+    {
+        SET_BIT(hi2c->Instance->CR1, I2C_CR1_SWRST);
+        DWT_Delay_us(10);
+        CLEAR_BIT(hi2c->Instance->CR1, I2C_CR1_SWRST);
+        hi2c->State = HAL_I2C_STATE_RESET;
+        (void)HAL_I2C_Init(hi2c);
+    }
+    else
+    {
+        hi2c->State = HAL_I2C_STATE_READY;
+        hi2c->Mode = HAL_I2C_MODE_NONE;
+        hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+        __HAL_UNLOCK(hi2c);
+    }
+}
+
 static void I2C_LCD_ExpanderWrite(uint8_t I2C_LCD_InstanceIndex, uint8_t DATA)
 {
+    I2C_HandleTypeDef *hi2c = I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_Handle;
     uint8_t TxData = (DATA) | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].BacklightVal;
     uint8_t addr = I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DeviceAddress;
-    HAL_I2C_Master_Transmit(I2C_LCD_CfgParam[I2C_LCD_InstanceIndex].I2C_Handle, addr, &TxData, 1, 20);
+    HAL_StatusTypeDef status;
+
+    /*
+     * Bảo vệ khung truyền I2C 1-byte (~200us ở 100kHz) không bị Task ưu tiên cao hơn
+     * chen ngang giữa thời điểm lấy tickstart và lúc đợi cờ SB/ADDR/TXE/BTF trong HAL I2C.
+     */
+#if APP_USE_FREERTOS
+    BaseType_t schedRunning = (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) ? pdTRUE : pdFALSE;
+    if (schedRunning == pdTRUE)
+    {
+        vTaskSuspendAll();
+    }
+#endif
+    status = HAL_I2C_Master_Transmit(hi2c, addr, &TxData, 1, 20);
+#if APP_USE_FREERTOS
+    if (schedRunning == pdTRUE)
+    {
+        (void)xTaskResumeAll();
+    }
+#endif
+
+    if (status != HAL_OK)
+    {
+        /* Phục hồi ngoại vi I2C1 và gửi lại đúng byte vừa lỗi để không mất đồng bộ cặp 4-bit nibble của LCD */
+        I2C_LCD_RecoverBus(hi2c);
+#if APP_USE_FREERTOS
+        if (schedRunning == pdTRUE)
+        {
+            vTaskSuspendAll();
+        }
+#endif
+        (void)HAL_I2C_Master_Transmit(hi2c, addr, &TxData, 1, 20);
+#if APP_USE_FREERTOS
+        if (schedRunning == pdTRUE)
+        {
+            (void)xTaskResumeAll();
+        }
+#endif
+    }
 }
 
 static void I2C_LCD_EnPulse(uint8_t I2C_LCD_InstanceIndex, uint8_t DATA)
@@ -159,13 +237,7 @@ void I2C_LCD_Init(uint8_t I2C_LCD_InstanceIndex)
 void I2C_LCD_Clear(uint8_t I2C_LCD_InstanceIndex)
 {
     I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_CLEARDISPLAY);
-    HAL_Delay(2);
-}
-
-void I2C_LCD_Home(uint8_t I2C_LCD_InstanceIndex)
-{
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_RETURNHOME);
-    HAL_Delay(2);
+    DWT_Delay_us(1800);
 }
 
 void I2C_LCD_SetCursor(uint8_t I2C_LCD_InstanceIndex, uint8_t Col, uint8_t Row)
@@ -191,25 +263,9 @@ void I2C_LCD_WriteString(uint8_t I2C_LCD_InstanceIndex, char *Str)
     }
 }
 
-void I2C_LCD_ShiftLeft(uint8_t I2C_LCD_InstanceIndex)
-{
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
-}
-
-void I2C_LCD_ShiftRight(uint8_t I2C_LCD_InstanceIndex)
-{
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
-}
-
 void I2C_LCD_Backlight(uint8_t I2C_LCD_InstanceIndex)
 {
 	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].BacklightVal = LCD_BACKLIGHT;
-    I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, 0);
-}
-
-void I2C_LCD_NoBacklight(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].BacklightVal = LCD_NOBACKLIGHT;
     I2C_LCD_ExpanderWrite(I2C_LCD_InstanceIndex, 0);
 }
 
@@ -217,49 +273,4 @@ void I2C_LCD_Display(uint8_t I2C_LCD_InstanceIndex)
 {
 	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl |= LCD_DISPLAYON;
 	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_NoDisplay(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl &= ~LCD_DISPLAYON;
-	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_Cursor(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl |= LCD_CURSORON;
-	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_NoCursor(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl &= ~LCD_CURSORON;
-	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_Blink(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl |= LCD_BLINKON;
-	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_NoBlink(uint8_t I2C_LCD_InstanceIndex)
-{
-	I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl &= ~LCD_BLINKON;
-	I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_DISPLAYCONTROL | I2C_LCD_InfoParam_g[I2C_LCD_InstanceIndex].DisplayCtrl);
-}
-
-void I2C_LCD_CreateCustomChar(uint8_t I2C_LCD_InstanceIndex, uint8_t CharIndex, const uint8_t* CharMap)
-{
-    CharIndex &= 0x07;  // Ensure index is in the range 0-7
-    I2C_LCD_Cmd(I2C_LCD_InstanceIndex, LCD_SETCGRAMADDR | (CharIndex << 3));
-    for (int i = 0; i < 8; i++)
-    {
-    	I2C_LCD_Send(I2C_LCD_InstanceIndex, CharMap[i], RS);
-    }
-}
-
-void I2C_LCD_PrintCustomChar(uint8_t I2C_LCD_InstanceIndex, uint8_t CharIndex)
-{
-	I2C_LCD_Send(I2C_LCD_InstanceIndex, CharIndex, RS);
 }
