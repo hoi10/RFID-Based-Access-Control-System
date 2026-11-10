@@ -225,14 +225,4 @@ void USART1_IRQHandler(void)
   }
 }
 
-void EXTI1_IRQHandler(void)
-{
-  if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_1) != RESET)
-  {
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_1);
-    EXTI->IMR &= ~GPIO_PIN_1;
-    App_EmergencyButtonIRQ();
-  }
-}
-
 /* USER CODE END 1 */

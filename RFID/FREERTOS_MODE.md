@@ -45,12 +45,6 @@ continue. Commands are case-insensitive:
 `LOCK` blocks RFID-based access; `OPEN` remains a manual UART override, including
 while locked. Administrative UART commands do not require PIN authentication.
 
-An emergency pushbutton is connected between PB1 and GND, using the MCU's
-internal pull-up. Pressing it opens the barrier for the configured interval,
-even while RFID access is locked. A falling-edge interrupt latches the press
-so short presses are not lost during RFID polling; software debounces release
-before rearming the interrupt.
-
 Each scan is also sent immediately as `LOG,<uptime-ms>,<UID>,<ALLOW|DENY>`.
 Every three consecutive unauthorized-card scans trigger a buzzer/LCD warning
 and reset the counter; a valid UID also resets it. Authorized cards, lock state

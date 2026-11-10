@@ -72,15 +72,15 @@ typedef struct
 
 // Danh sach UID hop le trong RAM (toi da 3 the)
 static uchar authorizedCards[MAX_AUTHORIZED_CARDS][4] = {
-    {0x62, 0x99, 0x18, 0x02},
-    {0x11, 0x22, 0x33, 0x44}
+    {0xE1, 0xC9, 0x2B, 0x06},
+    {0xEE, 0x9A, 0x25, 0x07}
 };
 static uint8_t numAuthorizedCards = 2U;
 
 // UID mac dinh khi khoi tao Flash
 static const uchar s_defaultCards[2][4] = {
-    {0x62, 0x99, 0x18, 0x02},
-    {0x11, 0x22, 0x33, 0x44}
+    {0xE1, 0xC9, 0x2B, 0x06},
+    {0xEE, 0x9A, 0x25, 0x07}
 };
 
 // Bien Flash Two-Page A/B
@@ -758,11 +758,6 @@ void App_PrintRtosStats(void)
                    (unsigned long)queueDropCount);
     UART_Write(line);
 #endif
-}
-
-void App_EmergencyButtonIRQ(void)
-{
-    // Du phong: PB1 khong gan nut nhan
 }
 
 void App_NotifyCardQueueResult(uint8_t sentOk)

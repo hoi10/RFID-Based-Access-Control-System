@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = "Debug/RFID.hex"
-elf = "Debug/RFID.elf"

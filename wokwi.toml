@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+firmware = "RFID/Debug/RFID.hex"
+elf = "RFID/Debug/RFID.elf"
+

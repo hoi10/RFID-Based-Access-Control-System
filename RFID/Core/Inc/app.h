@@ -40,6 +40,5 @@ void    App_HandleCard(const AppCardEvent *event);
 void    App_ProcessUart(void);
 void    App_SetTaskHandles(void *rfidTaskHandle, void *appTaskHandle);
 void    App_PrintRtosStats(void);
-void    App_EmergencyButtonIRQ(void);
 
 #endif
