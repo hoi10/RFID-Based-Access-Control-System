@@ -11,11 +11,6 @@ Trong các khu vực như bãi giữ xe thông minh, cổng kiểm soát tòa nh
 - Điều khiển cơ cấu rào chắn barrier đóng/mở tự động với độ phản hồi nhanh và chính xác.
 - Vận hành tin cậy nhờ kiến trúc đa nhiệm FreeRTOS, bảo vệ dữ liệu Whitelist trong bộ nhớ Flash nội và giám sát trực quan qua máy tính.
 
-<p align="center">
-  <img src="picture/system-overview.jpg" width="700" alt="Tổng quan mô hình hệ thống Access Control">
-</p>
-<p align="center"><em>Hình 1: Mô hình hệ thống kiểm soát ra vào phần cứng hoàn chỉnh</em></p>
-
 ---
 
 ## 2. Chức năng chính (Features)
@@ -53,11 +48,6 @@ graph TD
     E <-->|USART1 9600bps| J[Web Console / Máy tính]
 ```
 
-<p align="center">
-  <img src="picture/system-architecture.png" width="700" alt="Sơ đồ kiến trúc hệ thống STM32 và FreeRTOS">
-</p>
-<p align="center"><em>Hình 2: Sơ đồ kiến trúc luồng dữ liệu và các khối chức năng</em></p>
-
 ---
 
 ## 4. Sơ đồ kết nối phần cứng (Hardware Connections)
@@ -81,9 +71,9 @@ Hệ thống sử dụng module nguồn **HW-131** kết hợp nguồn ngoài đ
 | **3.3V / 5.0V**| HW-131 & Nguồn ngoài | Cấp nguồn độc lập | 3.3V cho STM32 & RC522; 5V cho LCD; Nguồn ngoài 5V/2A cho Servo |
 
 <p align="center">
-  <img src="picture/hardware-connections.png" width="700" alt="Sơ đồ kết nối phần cứng thực tế">
+  <img src="picture/anh_noi_day_thuc_te.jpg" width="700" alt="Ảnh đấu nối dây phần cứng thực tế">
 </p>
-<p align="center"><em>Hình 3: Sơ đồ đấu nối dây mạch phần cứng chi tiết</em></p>
+<p align="center"><em>Hình: Đấu nối dây phần cứng thực tế giữa STM32 và các module</em></p>
 
 ---
 
@@ -106,11 +96,6 @@ Hệ thống giao tiếp qua cổng nối tiếp USART1 với tốc độ **9600
 | **LOG** | `LOG` | Xem 10 sự kiện quẹt thẻ gần nhất trong bộ nhớ đệm RAM |
 | **LOG CLEAR** | `LOG CLEAR` | Xóa sạch toàn bộ lịch sử quẹt thẻ |
 | **BEEP** | `BEEP` | Kích hoạt còi phát 1 tiếng bíp kiểm tra |
-
-<p align="center">
-  <img src="picture/system-demo.jpg" width="700" alt="Thử nghiệm hệ thống quẹt thẻ và mở barrier thực tế">
-</p>
-<p align="center"><em>Hình 4: Thao tác quẹt thẻ thực tế và giao diện Web Serial Console</em></p>
 
 ---
 
