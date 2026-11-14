@@ -1,4 +1,4 @@
-// He thong kiem soat ra vao bang the RFID (STM32F103 + FreeRTOS)
+// He thong kiem soat ra vao bang the RFID (STM32F103)
 // MFRC522 (Software SPI), I2C LCD 1602, Servo 360, Active Buzzer, LED, UART
 
 #include "app.h"
@@ -40,8 +40,9 @@
 #define BUZZER_BEEP_DENY_OFF_MS      50U
 #define BUZZER_BEEP_ALARM_ON_MS      80U
 #define BUZZER_BEEP_ALARM_OFF_MS     50U
+#define BUZZER_TONE_HALF_PERIOD_US   250U
 
-// Thong so dieu khien servo barrier (goc quay thuc te 90 do)
+// Thong so dieu khien servo barrier (goc quay thuc te 60 do)
 #define BARRIER_CLOSED_ANGLE         0.0f
 #define BARRIER_OPEN_ANGLE           90.0f
 #define BARRIER_OPEN_MS              2500U
@@ -450,20 +451,29 @@ static void Buzzer_Beep(uint32_t durationMs)
     {
         return;
     }
+#if APP_USE_FREERTOS
     HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
     App_DelayMs(durationMs);
     Buzzer_Off();
+#else
+    uint32_t toggleCount = (durationMs * 1000U) / BUZZER_TONE_HALF_PERIOD_US;
+    for (uint32_t i = 0U; i < toggleCount; i++)
+    {
+        HAL_GPIO_TogglePin(BUZZER_PORT, BUZZER_PIN);
+        DWT_Delay_us(BUZZER_TONE_HALF_PERIOD_US);
+    }
+    Buzzer_Off();
+#endif
 }
 
 static void Buzzer_BeepPattern(uint8_t count, uint32_t onMs, uint32_t offMs)
 {
     for (uint8_t i = 0U; i < count; i++)
     {
-        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
-        App_DelayMs(onMs);
-        HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
+        Buzzer_Beep(onMs);
         if ((i + 1U < count) && (offMs > 0U))
         {
+            HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
             App_DelayMs(offMs);
         }
     }

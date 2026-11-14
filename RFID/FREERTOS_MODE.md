@@ -33,7 +33,7 @@ continue. Commands are case-insensitive:
 
 - `HELP` — show command syntax
 - `LIST` — list authorized UIDs
-- `ADD 11:22:33:44` — add a UID (up to five cards total)
+- `ADD 11:22:33:44` — add a UID (up to three cards total)
 - `DEL 11:22:33:44` — remove a UID
 - `LOG` — show the last ten card scans
 - `LOG CLEAR` — clear the in-RAM scan history

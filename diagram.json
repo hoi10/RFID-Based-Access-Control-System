@@ -21,8 +21,8 @@
     [ "servo:V+", "stm32:5V.1", "red", [ "v0" ] ],
     [ "servo:PWM", "stm32:A8", "orange", [ "v0" ] ],
 
-    [ "buzzer:2", "stm32:GND.1", "black", [ "v0" ] ],
-    [ "buzzer:1", "stm32:B10", "purple", [ "v0" ] ],
+    [ "buzzer:1", "stm32:GND.1", "black", [ "v0" ] ],
+    [ "buzzer:2", "stm32:B10", "purple", [ "v0" ] ],
 
     [ "led_green:A", "stm32:A4", "green", [ "v0" ] ],
     [ "led_green:C", "stm32:GND.1", "black", [ "v0" ] ],
