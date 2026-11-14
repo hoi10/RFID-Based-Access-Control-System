@@ -1202,7 +1202,7 @@
           <form id="commandForm" class="send-row">
             <span class="cmd-prompt" aria-hidden="true">&gt;</span>
             <input id="commandInput" type="text" maxlength="39" autocomplete="off"
-                   placeholder="Nhập lệnh UART (VD: STATUS, ADD 62:99:18:02)..." aria-label="Lệnh UART" disabled>
+                   placeholder="Nhập lệnh UART (VD: STATUS, ADD E1:C9:2B:06)..." aria-label="Lệnh UART" disabled>
             <span id="charCount" class="char-counter">0/39</span>
             <button id="sendButton" class="primary" type="submit" disabled>Gửi lệnh</button>
           </form>
@@ -1332,7 +1332,7 @@
     let historyIndex = -1;
 
     // Khởi tạo sẵn 2 thẻ mặc định trong firmware (sẽ được cập nhật chính xác khi nhận LIST từ STM32)
-    let syncedCards = ["62:99:18:02", "11:22:33:44"];
+    let syncedCards = ["E1:C9:2B:06", "EE:9A:25:07"];
     let expectingCardList = false;
     let scanHistory = [];
 
@@ -2062,7 +2062,7 @@
     function sendUidAction(prefix) {
       const uid = uidInput.value.trim().toUpperCase();
       if (!UID_REGEX.test(uid)) {
-        uidFeedback.textContent = "UID không hợp lệ. Hãy nhập đủ 4 byte hex theo dạng XX:XX:XX:XX (VD: 62:99:18:02).";
+        uidFeedback.textContent = "UID không hợp lệ. Hãy nhập đủ 4 byte hex theo dạng XX:XX:XX:XX (VD: E1:C9:2B:06).";
         uidFeedback.classList.add("err");
         uidInput.focus();
         return;
