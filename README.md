@@ -126,19 +126,30 @@ RFID-Based-Access-Control-System/
 ## 7. Hướng dẫn cài đặt & Chạy dự án (Getting Started)
 
 ### 7.1. Yêu cầu môi trường
-- **Phần mềm:** [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) (khuyến nghị phiên bản 1.10.0 trở lên) tích hợp trình biên dịch GNU ARM Embedded Toolchain.
+- **Phần mềm:** [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) (khuyến nghị phiên bản 1.10.0 trở lên), [Visual Studio Code](https://code.visualstudio.com/) kèm tiện ích mở rộng **Wokwi Simulator** (để chạy mô phỏng).
 - **Trình duyệt:** Google Chrome hoặc Microsoft Edge (hỗ trợ Web Serial API để mở `uart_web.html`).
 - **Phần cứng:** Mạch nạp ST-Link V2, board STM32F103C8T6 và cáp chuyển đổi USB-to-UART CP2102.
 
-### 7.2. Biên dịch và nạp Firmware
-1. Khởi động STM32CubeIDE, chọn `File` -> `Import...` -> `Existing Projects into Workspace`, duyệt chọn thư mục `RFID/`.
-2. Kiểm tra cấu hình trong `RFID.ioc` và Linker Script `STM32F103C8TX_FLASH.ld`.
-3. Nhấn `Project` -> `Build All` (Ctrl + B) để biên dịch chương trình. Xác nhận hoàn tất với **0 Errors, 0 Warnings**.
-4. Kết nối mạch nạp ST-Link V2 vào STM32 qua 4 đường tín hiệu SWD: `3.3V`, `GND`, `SWCLK`, `SWDIO`.
-5. Chọn `Run` -> `Run As` -> `STM32 Cortex-M C/C++ Application` để nạp firmware vào vi điều khiển.
+### 7.2. Chạy mô phỏng trên Wokwi Simulator (VS Code)
+Dự án hỗ trợ 2 cấu hình biên dịch tách biệt qua cờ `APP_USE_FREERTOS` trong `RFID/Core/Inc/app.h`:
+- Cấu hình **`Debug`** (`APP_USE_FREERTOS = 0` – vòng lặp *Super-loop*): Tương thích ổn định với bộ định thời ngoại vi của trình giả lập Wokwi.
+- Cấu hình **`Release`** (`APP_USE_FREERTOS = 1` – đa nhiệm *FreeRTOS*): Dành cho mạch phần cứng STM32F103C8T6 thực tế.
 
-### 7.3. Vận hành và Giám sát
-- Cấp nguồn 5V ngoài cho Servo SG90 (đảm bảo đã nối chung Mass GND với board STM32). Nhấn nút `Reset` trên STM32.
+**Các bước chạy giả lập Wokwi:**
+1. Mở **STM32CubeIDE**, chọn `File` -> `Import...` -> `Existing Projects into Workspace`, trỏ tới thư mục `RFID/` và nhấn `Finish`.
+2. Trên thanh công cụ, bấm mũi tên cạnh biểu tượng **Build** (hình chiếc búa) và chọn cấu hình **`Debug`** để tạo tệp thực thi trong thư mục `RFID/Debug/` (`RFID.elf`, `RFID.hex`) khớp với cấu hình trong `wokwi.toml`.
+3. Mở thư mục gốc của dự án bằng **VS Code**, cài đặt và kích hoạt giấy phép tiện ích **Wokwi Simulator**.
+4. Mở tệp `diagram.json` và nhấn nút **Start Simulation** (biểu tượng Play):
+   - Màn hình LCD1602 hiển thị `Quet the RFID / Moi quet the...`, cửa sổ Serial Monitor xuất thông điệp `BOOT,READY`.
+   - Nhấp vào module **MFRC522** trên sơ đồ để chọn thẻ quẹt thử, hoặc gõ trực tiếp các lệnh UART (`HELP`, `STATUS`, `LIST`, `OPEN`, `CLOSE`, `LOCK`, `UNLOCK`, `BEEP`...) vào khung **Serial Monitor** ở tốc độ `9600 bps`.
+
+### 7.3. Biên dịch và nạp Firmware lên phần cứng thực tế
+1. Trong **STM32CubeIDE**, chọn cấu hình biên dịch **`Release`** (hoặc đặt `#define APP_USE_FREERTOS 1` trong `app.h`), sau đó nhấn `Project` -> `Build All` (`Ctrl + B`).
+2. Kết nối mạch nạp ST-Link V2 vào STM32 qua 4 chân SWD: `3.3V`, `GND`, `SWCLK`, `SWDIO`.
+3. Chọn `Run` -> `Run As` -> `STM32 Cortex-M C/C++ Application` để nạp firmware xuống vi điều khiển.
+
+### 7.4. Vận hành và Giám sát phần cứng
+- Cấp nguồn 5V ngoài cho Servo SG90 (đảm bảo nối chung Mass GND với board STM32). Nhấn nút `Reset` trên STM32.
 - Màn hình LCD1602 hiển thị thông điệp chờ: `Quet the RFID / Moi quet the...`.
 - Kết nối module USB-UART vào máy tính, mở tệp `uart_web.html` trên trình duyệt, nhấn **Connect**, chọn đúng cổng COM và tốc độ `9600 bps` để bắt đầu điều khiển và theo dõi sự kiện quẹt thẻ thời gian thực.
 
@@ -150,9 +161,9 @@ RFID-Based-Access-Control-System/
   - Nhận diện nhạy thẻ Mifare Classic 1K ở cự ly 2–5 cm; thuật toán Debounce chống quét lặp hoạt động chuẩn xác.
   - Phân tách 3 nhánh nguồn và nối chung Mass loại bỏ hoàn toàn hiện tượng sụt áp (Brownout Reset) khi Servo khởi động.
   - Bộ nhớ Flash Two-Page A/B khôi phục chính xác danh sách thẻ sau khi ngắt và cấp lại nguồn.
-- **Giới hạn mô phỏng (Wokwi):**
-  - Chạy tốt các lệnh UART, mô phỏng hiển thị LCD và quay servo ảo.
-  - Xuất hiện thông báo `ERR,FLASH_TOO_SMALL` do thanh ghi vùng nhớ ảo trên Wokwi trả về dung lượng < 64 KB, firmware sẽ tự động chuyển sang danh sách thẻ trên RAM.
+- **Môi trường mô phỏng (Wokwi):**
+  - Sử dụng cấu hình `Debug` (`APP_USE_FREERTOS = 0`) để đảm bảo tính tương thích xung nhịp và ngắt SysTick trên bộ giả lập Wokwi.
+  - Hỗ trợ kiểm thử đầy đủ luồng quét thẻ MFRC522 ảo, hiển thị LCD1602 I2C, góc quay Servo SG90, còi Buzzer, đèn LED và tập lệnh giao tiếp UART.
 - **Hạn chế kỹ thuật:**
   - Whitelist nội bộ hiện cấu hình tối đa 3 thẻ UID 4-byte phục vụ quy mô thực nghiệm học phần.
   - Giao tiếp giám sát sử dụng cổng UART có dây, chưa tích hợp kết nối mạng không dây (Wi-Fi/Ethernet).
